@@ -109,6 +109,8 @@ int32 effect::is_available() {
 	pduel->lua->add_param(this, PARAM_TYPE_EFFECT);
 	int32 res = pduel->lua->check_condition(condition, 1);
 	if(res) {
+		if(!(status & EFFECT_STATUS_AVAILABLE))
+			id = pduel->game_field->infos.field_id++;
 		status |= EFFECT_STATUS_AVAILABLE;
 	} else
 		status &= ~EFFECT_STATUS_AVAILABLE;
@@ -441,7 +443,8 @@ int32 effect::is_chainable(uint8 tp) {
 	if(!(type & EFFECT_TYPE_ACTIONS))
 		return FALSE;
 	int32 sp = get_speed();
-	if((type & EFFECT_TYPE_ACTIVATE) && (sp <= 1) && !(flag & EFFECT_FLAG_COF))
+	// Curse of Field(12470447) is the exception
+	if((type & EFFECT_TYPE_ACTIVATE) && (sp <= 1) && handler->data.code != 12470447)
 		return FALSE;
 	if(pduel->game_field->core.current_chain.size()) {
 		if(!(flag & EFFECT_FLAG_FIELD_ONLY) && (type & EFFECT_TYPE_TRIGGER_O) 

@@ -230,12 +230,17 @@ void field::release(card* target, effect* reason_effect, uint32 reason, uint32 r
 	tset.insert(target);
 	release(&tset, reason_effect, reason, reason_player);
 }
+// send to locations other than LOCATION_ONFIELD
 void field::send_to(card_set* targets, effect* reason_effect, uint32 reason, uint32 reason_player, uint32 playerid, uint32 destination, uint32 sequence, uint32 position) {
-	if(!(destination & (LOCATION_HAND + LOCATION_DECK + LOCATION_GRAVE + LOCATION_REMOVED)))
+	if(destination & LOCATION_ONFIELD)
 		return;
 	uint32 p, pos;
-	for(auto cit = targets->begin(); cit != targets->end(); ++cit) {
-		card* pcard = *cit;
+	for(auto cit = targets->begin(); cit != targets->end(); ) {
+		card* pcard = *cit++;
+		if((destination & LOCATION_EXTRA) && !(pcard->data.type & TYPE_PENDULUM)) {
+			targets->erase(pcard);
+			continue;
+		}
 		pcard->temp.reason = pcard->current.reason;
 		pcard->temp.reason_effect = pcard->current.reason_effect;
 		pcard->temp.reason_player = pcard->current.reason_player;
@@ -2998,6 +3003,8 @@ int32 field::send_to(uint16 step, group * targets, card * target) {
 	return TRUE;
 }
 // PROCESSOR_SENDTO goes here
+// step 1: call PROCESSOR_SENDTO_STEP
+// step 6: move cards
 int32 field::send_to(uint16 step, group * targets, effect * reason_effect, uint32 reason, uint8 reason_player) {
 	struct exargs {
 		group* targets;
@@ -3020,7 +3027,8 @@ int32 field::send_to(uint16 step, group * targets, effect * reason_effect, uint3
 			         || (dest == LOCATION_HAND && !pcard->is_capable_send_to_hand(core.reason_player))
 			         || (dest == LOCATION_DECK && !pcard->is_capable_send_to_deck(core.reason_player))
 			         || (dest == LOCATION_REMOVED && !pcard->is_removeable(core.reason_player))
-			         || (dest == LOCATION_GRAVE && !pcard->is_capable_send_to_grave(core.reason_player)))) {
+			         || (dest == LOCATION_GRAVE && !pcard->is_capable_send_to_grave(core.reason_player))
+			         || (dest == LOCATION_EXTRA && !pcard->is_capable_send_to_extra(core.reason_player)))) {
 				pcard->current.reason = pcard->temp.reason;
 				pcard->current.reason_player = pcard->temp.reason_player;
 				pcard->current.reason_effect = pcard->temp.reason_effect;
@@ -3255,7 +3263,7 @@ int32 field::send_to(uint16 step, group * targets, effect * reason_effect, uint3
 		} else if(dest == LOCATION_REMOVED) {
 			core.hint_timing[pcard->current.controler] |= TIMING_REMOVE;
 		}
-		//move card
+		//call move_card()
 		if(pcard->current.controler != playerid || pcard->current.location != dest) {
 			pduel->write_buffer8(MSG_MOVE);
 			pduel->write_buffer32(pcard->data.code);
@@ -3925,8 +3933,7 @@ int32 field::operation_replace(uint16 step, effect * replace_effect, group * tar
 	case 3: {
 		if(core.continuous_chain.rbegin()->target_cards)
 			pduel->delete_group(core.continuous_chain.rbegin()->target_cards);
-		chain::opmap::iterator oit;
-		for(oit = core.continuous_chain.rbegin()->opinfos.begin(); oit != core.continuous_chain.rbegin()->opinfos.end(); ++oit) {
+		for(auto oit = core.continuous_chain.rbegin()->opinfos.begin(); oit != core.continuous_chain.rbegin()->opinfos.end(); ++oit) {
 			if(oit->second.op_cards)
 				pduel->delete_group(oit->second.op_cards);
 		}
@@ -3995,8 +4002,7 @@ int32 field::operation_replace(uint16 step, effect * replace_effect, group * tar
 	case 8: {
 		if(core.continuous_chain.rbegin()->target_cards)
 			pduel->delete_group(core.continuous_chain.rbegin()->target_cards);
-		chain::opmap::iterator oit;
-		for(oit = core.continuous_chain.rbegin()->opinfos.begin(); oit != core.continuous_chain.rbegin()->opinfos.end(); ++oit) {
+		for(auto oit = core.continuous_chain.rbegin()->opinfos.begin(); oit != core.continuous_chain.rbegin()->opinfos.end(); ++oit) {
 			if(oit->second.op_cards)
 				pduel->delete_group(oit->second.op_cards);
 		}
