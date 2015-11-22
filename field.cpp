@@ -199,7 +199,7 @@ void field::add_card(uint8 playerid, card* pcard, uint8 location, uint8 sequence
 	case LOCATION_EXTRA:
 		player[playerid].list_extra.push_back(pcard);
 		pcard->current.sequence = player[playerid].list_extra.size() - 1;
-		if((pcard->operation_param >> 24) & POS_FACEUP)
+		if((pcard->data.type & TYPE_PENDULUM) && ((pcard->operation_param >> 24) & POS_FACEUP))
 			++player[playerid].extra_p_count;
 		break;
 	}
@@ -244,7 +244,7 @@ void field::remove_card(card* pcard) {
 	case LOCATION_EXTRA:
 		player[playerid].list_extra.erase(player[playerid].list_extra.begin() + pcard->current.sequence);
 		reset_sequence(playerid, LOCATION_EXTRA);
-		if(pcard->current.position & POS_FACEUP)
+		if((pcard->data.type & TYPE_PENDULUM) && (pcard->current.position & POS_FACEUP))
 			--player[playerid].extra_p_count;
 		break;
 	}
@@ -2035,6 +2035,7 @@ int32 field::is_player_can_sset(uint8 playerid, card * pcard) {
 	}
 	return TRUE;
 }
+// check player-effect EFFECT_CANNOT_SPECIAL_SUMMON without target
 int32 field::is_player_can_spsummon(uint8 playerid) {
 	effect_set eset;
 	filter_player_effect(playerid, EFFECT_CANNOT_SPECIAL_SUMMON, &eset);

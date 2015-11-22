@@ -64,6 +64,10 @@ enum effect_flag2 {
 	EFFECT_FLAG2_NAGA				= 0x0001,
 	EFFECT_FLAG2_COF				= 0x0002,
 };
+inline effect_flag operator|(effect_flag flag1, effect_flag flag2)
+{
+	return static_cast<effect_flag>(static_cast<uint32>(flag1) | static_cast<uint32>(flag2));
+}
 
 class effect {
 public:
@@ -186,10 +190,6 @@ public:
 #define EFFECT_TYPE_QUICK_F			0x0400	//
 #define EFFECT_TYPE_CONTINUOUS		0x0800	//
 
-inline effect_flag operator|(effect_flag flag1, effect_flag flag2)
-{
-	return static_cast<effect_flag>(static_cast<uint32>(flag1) | static_cast<uint32>(flag2));
-}
 //========== Codes ==========
 #define EFFECT_IMMUNE_EFFECT			1	//
 #define EFFECT_DISABLE					2	//
@@ -399,7 +399,8 @@ inline effect_flag operator|(effect_flag flag1, effect_flag flag2)
 #define EFFECT_NO_EFFECT_DAMAGE			335
 #define EFFECT_UNSUMMONABLE_CARD		336
 #define EFFECT_DISABLE_CHAIN_FIELD		337
-#define	EFFECT_DISCARD_COST_CHANGE		338
+#define EFFECT_DISCARD_COST_CHANGE		338
+#define EFFECT_HAND_SYNCHRO				339
 
 #define EVENT_STARTUP		1000
 #define EVENT_FLIP			1001
