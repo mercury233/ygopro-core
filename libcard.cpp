@@ -744,8 +744,8 @@ int32 scriptlib::card_get_attacked_group(lua_State *L) {
 	card* pcard = *(card**) lua_touserdata(L, 1);
 	group* pgroup = pcard->pduel->new_group();
 	for(auto cit = pcard->attacked_cards.begin(); cit != pcard->attacked_cards.end(); ++cit) {
-		if(cit->second)
-			pgroup->container.insert(cit->second);
+		if(cit->second.first)
+			pgroup->container.insert(cit->second.first);
 	}
 	interpreter::group2value(L, pgroup);
 	return 1;
@@ -770,8 +770,8 @@ int32 scriptlib::card_get_battled_group(lua_State *L) {
 	card* pcard = *(card**) lua_touserdata(L, 1);
 	group* pgroup = pcard->pduel->new_group();
 	for(auto cit = pcard->battled_cards.begin(); cit != pcard->battled_cards.end(); ++cit) {
-		if(cit->second)
-			pgroup->container.insert(cit->second);
+		if(cit->second.first)
+			pgroup->container.insert(cit->second.first);
 	}
 	interpreter::group2value(L, pgroup);
 	return 1;
@@ -795,9 +795,8 @@ int32 scriptlib::card_is_direct_attacked(lua_State *L) {
 	check_param(L, PARAM_TYPE_CARD, 1);
 	card* pcard = *(card**) lua_touserdata(L, 1);
 	bool ret = false;
-	for(auto cit = pcard->attacked_cards.begin(); cit != pcard->attacked_cards.end(); ++cit)
-		if(cit->first == 0)
-			ret = true;
+	if(pcard->attacked_cards.find(0) != pcard->attacked_cards.end())
+		ret = true;
 	lua_pushboolean(L, ret);
 	return 1;
 }
@@ -1708,7 +1707,7 @@ int32 scriptlib::card_is_public(lua_State *L) {
 	check_param_count(L, 1);
 	check_param(L, PARAM_TYPE_CARD, 1);
 	card* pcard = *(card**) lua_touserdata(L, 1);
-	if(pcard->is_status(STATUS_IS_PUBLIC))
+	if(pcard->is_position(POS_FACEUP))
 		lua_pushboolean(L, 1);
 	else
 		lua_pushboolean(L, 0);
@@ -1771,7 +1770,7 @@ int32 scriptlib::card_remove_counter(lua_State *L) {
 			pcard->pduel->write_buffer8(pcard->current.controler);
 			pcard->pduel->write_buffer8(pcard->current.location);
 			pcard->pduel->write_buffer8(pcard->current.sequence);
-			pcard->pduel->write_buffer8(cmit->second);
+			pcard->pduel->write_buffer8(cmit->second[0] + cmit->second[1]);
 		}
 		pcard->counters.clear();
 		return 0;
