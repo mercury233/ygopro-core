@@ -61,6 +61,29 @@ int32 scriptlib::card_get_origin_code_rule(lua_State *L) {
 	}
 	return 1;
 }
+int32 scriptlib::card_is_fusion_code(lua_State *L) {
+	check_param_count(L, 2);
+	check_param(L, PARAM_TYPE_CARD, 1);
+	card* pcard = *(card**) lua_touserdata(L, 1);
+	uint32 tcode = lua_tointeger(L, 2);
+	uint32 code1 = pcard->get_code();
+	uint32 code2 = pcard->get_another_code();
+	uint32 result = FALSE;
+	if(code1 == tcode || (code2 && code2 == tcode)) {
+		result = TRUE;
+	} else {
+		effect_set eset;
+		pcard->filter_effect(EFFECT_ADD_FUSION_CODE, &eset);
+		for(int32 i = 0; i < eset.size(); ++i) {
+			if(tcode == eset[i]->get_value(pcard)) {
+				result = TRUE;
+				break;
+			}
+		}
+	}
+	lua_pushboolean(L, result);
+	return 1;
+}
 int32 scriptlib::card_is_set_card(lua_State *L) {
 	check_param_count(L, 2);
 	check_param(L, PARAM_TYPE_CARD, 1);
@@ -75,6 +98,14 @@ int32 scriptlib::card_is_pre_set_card(lua_State *L) {
 	card* pcard = *(card**) lua_touserdata(L, 1);
 	uint32 set_code = lua_tointeger(L, 2);
 	lua_pushboolean(L, pcard->is_pre_set_card(set_code));
+	return 1;
+}
+int32 scriptlib::card_is_fusion_set_card(lua_State *L) {
+	check_param_count(L, 2);
+	check_param(L, PARAM_TYPE_CARD, 1);
+	card* pcard = *(card**) lua_touserdata(L, 1);
+	uint32 set_code = lua_tointeger(L, 2);
+	lua_pushboolean(L, pcard->is_fusion_set_card(set_code));
 	return 1;
 }
 int32 scriptlib::card_get_type(lua_State *L) {
@@ -1273,8 +1304,16 @@ int32 scriptlib::card_is_xyz_summonable(lua_State *L) {
 		check_param(L, PARAM_TYPE_GROUP, 2);
 		materials = *(group**) lua_touserdata(L, 2);
 	}
+	int32 minc = 0;
+	if(lua_gettop(L) >= 3)
+		minc = lua_tointeger(L, 3);
+	int32 maxc = 0;
+	if(lua_gettop(L) >= 4)
+		maxc = lua_tointeger(L, 4);
 	uint32 p = pcard->pduel->game_field->core.reason_player;
 	pcard->pduel->game_field->core.limit_xyz = materials;
+	pcard->pduel->game_field->core.limit_xyz_minc = minc;
+	pcard->pduel->game_field->core.limit_xyz_maxc = maxc;
 	lua_pushboolean(L, pcard->is_special_summonable(p, SUMMON_TYPE_XYZ));
 	return 1;
 }

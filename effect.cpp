@@ -207,9 +207,19 @@ int32 effect::is_activateable(uint8 playerid, const tevent& e, int32 neglect_con
 			if(handler->is_affected_by_effect(EFFECT_CANNOT_TRIGGER))
 				return FALSE;
 		} else if(!(type & EFFECT_TYPE_CONTINUOUS)) {
-			if((handler->current.location & (LOCATION_ONFIELD | LOCATION_REMOVED)) && (code != EVENT_FLIP && !(is_flag(EFFECT_FLAG_SET_AVAILABLE)))
-					&& (!handler->is_position(POS_FACEUP) || !handler->is_status(STATUS_EFFECT_ENABLED)))
+			if((handler->current.location & LOCATION_SZONE) && !in_range(handler->current.location, handler->current.sequence))
 				return FALSE;
+			if((type & EFFECT_TYPE_SINGLE) && code ==EVENT_FLIP){
+				// flip monster effects can be activated while face-down in LOCATION_MZONE
+				if((handler->current.location & LOCATION_REMOVED) && !handler->is_position(POS_FACEUP))
+					return FALSE;
+			}
+			else {
+				// effects with EFFECT_FLAG_SET_AVAILABLE can be activated while face-down
+				if((handler->current.location & (LOCATION_ONFIELD | LOCATION_REMOVED)) && !is_flag(EFFECT_FLAG_SET_AVAILABLE)
+						&& (!handler->is_position(POS_FACEUP) || !handler->is_status(STATUS_EFFECT_ENABLED)))
+					return FALSE;
+			}
 			if(!(type & (EFFECT_TYPE_FLIP | EFFECT_TYPE_TRIGGER_F)) 
 					&& !((type & EFFECT_TYPE_SINGLE) && (code == EVENT_TO_GRAVE || code == EVENT_DESTROYED || code == EVENT_SPSUMMON_SUCCESS || code == EVENT_TO_HAND))) {
 				if((code < 1132 || code > 1149) && pduel->game_field->infos.phase == PHASE_DAMAGE && !(is_flag(EFFECT_FLAG_DAMAGE_STEP)))
@@ -501,7 +511,7 @@ int32 effect::reset(uint32 reset_level, uint32 reset_type) {
 		uint8 pid = get_handler_player();
 		uint8 tp = handler->pduel->game_field->infos.turn_player;
 		if((((reset_flag & RESET_SELF_TURN) && pid == tp) || ((reset_flag & RESET_OPPO_TURN) && pid != tp)) 
-				&& (reset_level & 0xff & reset_flag))
+				&& (reset_level & 0x3ff & reset_flag))
 			reset_count--;
 		if((reset_count & 0xff) == 0)
 			return TRUE;

@@ -2045,13 +2045,17 @@ int32 field::special_summon_rule(uint16 step, uint8 sumplayer, card * target, ui
 	case 0: {
 		effect_set eset;
 		card* tuner = core.limit_tuner;
-		group* materials = core.limit_xyz;
 		group* syn = core.limit_syn;
+		group* materials = core.limit_xyz;
+		int32 minc = core.limit_xyz_minc;
+		int32 maxc = core.limit_xyz_maxc;
 		target->filter_spsummon_procedure(sumplayer, &eset, summon_type);
 		target->filter_spsummon_procedure_g(sumplayer, &eset);
 		core.limit_tuner = tuner;
-		core.limit_xyz = materials;
 		core.limit_syn = syn;
+		core.limit_xyz = materials;
+		core.limit_xyz_minc = minc;
+		core.limit_xyz_maxc = maxc;
 		if(!eset.size())
 			return TRUE;
 		core.select_effects.clear();
@@ -2081,6 +2085,10 @@ int32 field::special_summon_rule(uint16 step, uint8 sumplayer, card * target, ui
 				pduel->lua->add_param(core.limit_syn, PARAM_TYPE_GROUP);
 			} else if(core.limit_xyz) {
 				pduel->lua->add_param(core.limit_xyz, PARAM_TYPE_GROUP);
+				if(core.limit_xyz_minc) {
+					pduel->lua->add_param(core.limit_xyz_minc, PARAM_TYPE_INT);
+					pduel->lua->add_param(core.limit_xyz_maxc, PARAM_TYPE_INT);
+				}
 			}
 			core.sub_solving_event.push_back(nil_event);
 			add_process(PROCESSOR_EXECUTE_TARGET, 0, peffect, 0, sumplayer, 0);
@@ -2115,6 +2123,12 @@ int32 field::special_summon_rule(uint16 step, uint8 sumplayer, card * target, ui
 			if(core.limit_xyz) {
 				pduel->lua->add_param(core.limit_xyz, PARAM_TYPE_GROUP);
 				core.limit_xyz = 0;
+				if(core.limit_xyz_minc) {
+					pduel->lua->add_param(core.limit_xyz_minc, PARAM_TYPE_INT);
+					pduel->lua->add_param(core.limit_xyz_maxc, PARAM_TYPE_INT);
+					core.limit_xyz_minc = 0;
+					core.limit_xyz_maxc = 0;
+				}
 			}
 			core.sub_solving_event.push_back(nil_event);
 			add_process(PROCESSOR_EXECUTE_OPERATION, 0, peffect, 0, sumplayer, 0);
@@ -4185,32 +4199,35 @@ int32 field::select_synchro_material(int16 step, uint8 playerid, card* pcard, in
 		if(!smat)
 			return FALSE;
 		card* tuner = core.limit_tuner;
-		int32 l = tuner->get_synchro_level(pcard);
-		int32 l1 = l & 0xffff;
-		//int32 l2 = l >> 16;
-		int32 lv = pcard->get_level();
-		lv -= l1;
-		l = smat->get_synchro_level(pcard);
-		l1 = l & 0xffff;
-		lv -= l1;
-		if(lv == 0)
-			core.units.begin()->step = 5;
+		effect* pcheck = tuner->is_affected_by_effect(EFFECT_SYNCHRO_CHECK);
+		if(pcheck)
+			pcheck->get_value(smat);
+		if(min == 1) {
+			int32 lv = pcard->get_level();
+			card_vector nsyn;
+			nsyn.push_back(tuner);
+			nsyn.push_back(smat);
+			tuner->operation_param = tuner->get_synchro_level(pcard);
+			smat->operation_param = smat->get_synchro_level(pcard);
+			if(check_with_sum_limit_m(nsyn, lv, 0, 0, 0, 2))
+				core.units.begin()->step = 5;
+		}
 		return FALSE;
 	}
 	case 4: {
+		int32 lv = pcard->get_level();
+		int32 mcount = 1;
 		card* tuner = core.limit_tuner;
 		effect* pcheck = tuner->is_affected_by_effect(EFFECT_SYNCHRO_CHECK);
-		int32 l = tuner->get_synchro_level(pcard);
-		int32 l1 = l & 0xffff;
-		//int32 l2 = l >> 16;
-		int32 lv = pcard->get_level();
-		lv -= l1;
+		core.must_select_cards.clear();
+		core.must_select_cards.push_back(tuner);
+		tuner->operation_param = tuner->get_synchro_level(pcard);
 		if(smat) {
-			l = smat->get_synchro_level(pcard);
-			l1 = l & 0xffff;
-			lv -= l1;
 			min--;
 			max--;
+			core.must_select_cards.push_back(smat);
+			smat->operation_param = smat->get_synchro_level(pcard);
+			mcount++;
 		}
 		core.select_cards.clear();
 		if(mg) {
@@ -4250,26 +4267,36 @@ int32 field::select_synchro_material(int16 step, uint8 playerid, card* pcard, in
 					break;
 			}
 			if(peffect) {
+				card_vector nsyn(core.must_select_cards);
+				nsyn.insert(nsyn.end(), core.select_cards.begin(), core.select_cards.end());
 				card_vector nsyn_filtered;
-				for(auto cit = core.select_cards.begin(); cit != core.select_cards.end(); ++cit) {
+				for(auto cit = nsyn.begin(); cit != nsyn.end(); ++cit) {
 					if(!peffect->get_value(*cit))
 						nsyn_filtered.push_back(*cit);
 				}
-				if(nsyn_filtered.size() < core.select_cards.size()) {
+				if(nsyn_filtered.size() < nsyn.size()) {
 					card_vector nsyn_removed;
-					for(auto cit = core.select_cards.begin(); cit != core.select_cards.end(); ++cit) {
+					for(auto cit = nsyn.begin(); cit != nsyn.end(); ++cit) {
 						if(!(*cit)->is_affected_by_effect(EFFECT_SCRAP_CHIMERA))
 							nsyn_removed.push_back(*cit);
 					}
-					if(check_with_sum_limit(&nsyn_filtered, lv, 0, 1, min, max)) {
-						if(check_with_sum_limit(&nsyn_removed, lv, 0, 1, min, max)) {
+					bool mfiltered = true;
+					bool mremoved = true;
+					for(int32 i = 0; i < mcount; ++i) {
+						if(peffect->get_value(nsyn[i]))
+							mfiltered = false;
+						if(nsyn[i]->is_affected_by_effect(EFFECT_SCRAP_CHIMERA))
+							mremoved = false;
+					}
+					if(mfiltered && check_with_sum_limit_m(nsyn_filtered, lv, 0, min, max, mcount)) {
+						if(mremoved && check_with_sum_limit_m(nsyn_removed, lv, 0, min, max, mcount)) {
 							add_process(PROCESSOR_SELECT_YESNO, 0, 0, 0, playerid, peffect->description);
 							core.units.begin()->step = 6;
 							return FALSE;
 						} else
-							core.select_cards.swap(nsyn_filtered);
+							core.select_cards.assign(nsyn_filtered.begin() + mcount, nsyn_filtered.end());
 					} else
-						core.select_cards.swap(nsyn_removed);
+						core.select_cards.assign(nsyn_removed.begin() + mcount, nsyn_removed.end());
 				}
 			}
 		}
@@ -4283,14 +4310,13 @@ int32 field::select_synchro_material(int16 step, uint8 playerid, card* pcard, in
 	case 5: {
 		lua_pop(pduel->lua->current_state, 2);
 		group* pgroup = pduel->new_group();
-		card* pcard;
-		for(int32 i = 0; i < returns.bvalue[0]; ++i) {
-			pcard = core.select_cards[returns.bvalue[i + 1]];
+		int32 mcount = core.must_select_cards.size();
+		for(int32 i = mcount; i < returns.bvalue[0]; ++i) {
+			card* pcard = core.select_cards[returns.bvalue[i + 1]];
 			pgroup->container.insert(pcard);
 		}
-		pgroup->container.insert(core.limit_tuner);
-		if(smat)
-			pgroup->container.insert(smat);
+		pgroup->container.insert(core.must_select_cards.begin(), core.must_select_cards.end());
+		core.must_select_cards.clear();
 		pduel->lua->add_param(pgroup, PARAM_TYPE_GROUP);
 		pduel->restore_assumes();
 		core.limit_tuner = 0;
@@ -4307,16 +4333,8 @@ int32 field::select_synchro_material(int16 step, uint8 playerid, card* pcard, in
 		return TRUE;
 	}
 	case 7: {
-		card* tuner = core.limit_tuner;
-		int32 l = tuner->get_synchro_level(pcard);
-		int32 l1 = l & 0xffff;
-		//int32 l2 = l >> 16;
 		int32 lv = pcard->get_level();
-		lv -= l1;
 		if(smat) {
-			l = smat->get_synchro_level(pcard);
-			l1 = l & 0xffff;
-			lv -= l1;
 			min--;
 			max--;
 		}

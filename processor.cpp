@@ -569,7 +569,7 @@ int32 field::process() {
 		return PROCESSOR_WAITING + pduel->bufferlen;
 	}
 	case PROCESSOR_ANNOUNCE_CARD: {
-		if(announce_card(it->step, it->arg1)) {
+		if(announce_card(it->step, it->arg1, it->arg2)) {
 			pduel->lua->add_param(returns.ivalue[0], PARAM_TYPE_INT);
 			core.units.pop_front();
 		} else {
@@ -788,11 +788,12 @@ int32 field::process() {
 			it->step++;
 		} else {
 			group* pgroup = pduel->new_group();
-			card* pcard;
-			for(int32 i = 0; i < returns.bvalue[0]; ++i) {
-				pcard = core.select_cards[returns.bvalue[i + 1]];
+			int32 mcount = core.must_select_cards.size();
+			for(int32 i = mcount; i < returns.bvalue[0]; ++i) {
+				card* pcard = core.select_cards[returns.bvalue[i + 1]];
 				pgroup->container.insert(pcard);
 			}
+			core.must_select_cards.clear();
 			pduel->lua->add_param(pgroup, PARAM_TYPE_GROUP);
 			core.units.pop_front();
 		}
@@ -1315,7 +1316,8 @@ int32 field::process_phase_event(int16 step, int32 phase) {
 	switch(step) {
 	case 0: {
 		if((phase == PHASE_DRAW && is_player_affected_by_effect(infos.turn_player, EFFECT_SKIP_DP))
-		        || (phase == PHASE_STANDBY && is_player_affected_by_effect(infos.turn_player, EFFECT_SKIP_SP))) {
+		        || (phase == PHASE_STANDBY && is_player_affected_by_effect(infos.turn_player, EFFECT_SKIP_SP))
+		        || (phase == PHASE_BATTLE_START && is_player_affected_by_effect(infos.turn_player, EFFECT_SKIP_BP))) {
 			core.units.begin()->step = 24;
 			return FALSE;
 		}
@@ -1389,9 +1391,12 @@ int32 field::process_phase_event(int16 step, int32 phase) {
 				core.hint_timing[infos.turn_player] = TIMING_DRAW_PHASE;
 			else if(phase == PHASE_STANDBY)
 				core.hint_timing[infos.turn_player] = TIMING_STANDBY_PHASE;
+			else if(phase == PHASE_BATTLE_START)
+				core.hint_timing[infos.turn_player] = TIMING_BATTLE_START;
 			else if(phase == PHASE_BATTLE)
 				core.hint_timing[infos.turn_player] = TIMING_BATTLE_END;
-			else core.hint_timing[infos.turn_player] = TIMING_END_PHASE;
+			else 
+				core.hint_timing[infos.turn_player] = TIMING_END_PHASE;
 			pr = effects.activate_effect.equal_range(EVENT_FREE_CHAIN);
 			for(; pr.first != pr.second; ++pr.first) {
 				peffect = pr.first->second;
@@ -1440,6 +1445,8 @@ int32 field::process_phase_event(int16 step, int32 phase) {
 				pduel->write_buffer32(20);
 			else if(infos.phase == PHASE_STANDBY)
 				pduel->write_buffer32(21);
+			else if(infos.phase == PHASE_BATTLE_START)
+				pduel->write_buffer32(28);
 			else if(infos.phase == PHASE_BATTLE)
 				pduel->write_buffer32(25);
 			else
@@ -1639,6 +1646,8 @@ int32 field::process_point_event(int16 step, int32 skip_trigger, int32 skip_free
 					core.ntpchain.push_back(*clit);
 				peffect->handler->set_status(STATUS_CHAINING, TRUE);
 				peffect->dec_count(tp);
+				if(peffect->is_flag(EFFECT_FLAG_CVAL_CHECK))
+					peffect->get_value();
 			}
 		}
 		core.new_fchain_s.clear();
@@ -2218,7 +2227,7 @@ int32 field::process_instant_event() {
 				}
 			}
 		}
-		if(elit->event_code == EVENT_ADJUST || (((elit->event_code & 0xf000) == EVENT_PHASE_START) && (elit->event_code & 0xff) != PHASE_BATTLE))
+		if(elit->event_code == EVENT_ADJUST || ((elit->event_code & 0xf000) == EVENT_PHASE_START))
 			continue;
 		//triggers
 		pr = effects.trigger_f_effect.equal_range(elit->event_code);
@@ -3945,7 +3954,7 @@ int32 field::process_turn(uint16 step, uint8 turn_player) {
 			return FALSE;
 		}
 		pduel->write_buffer8(MSG_NEW_PHASE);
-		pduel->write_buffer8(infos.phase);
+		pduel->write_buffer16(infos.phase);
 		raise_event((card*)0, EVENT_PREDRAW, 0, 0, 0, turn_player, 0);
 		process_instant_event();
 		if(core.new_fchain.size() || core.new_ochain.size())
@@ -3965,15 +3974,13 @@ int32 field::process_turn(uint16 step, uint8 turn_player) {
 		return FALSE;
 	}
 	case 3: {
-		//Standby Phase
-		infos.phase = PHASE_STANDBY;
-		core.phase_action = FALSE;
-		raise_event((card*)0, EVENT_PHASE_PRESTART + PHASE_STANDBY, 0, 0, 0, turn_player, 0);
-		process_instant_event();
-		adjust_all();
+		// EVENT_PHASE_PRESTART is removed
 		return FALSE;
 	}
 	case 4: {
+		//Standby Phase
+		infos.phase = PHASE_STANDBY;
+		core.phase_action = FALSE;
 		core.new_fchain.clear();
 		core.new_ochain.clear();
 		core.quick_f_chain.clear();
@@ -3985,13 +3992,13 @@ int32 field::process_turn(uint16 step, uint8 turn_player) {
 			return FALSE;
 		}
 		pduel->write_buffer8(MSG_NEW_PHASE);
-		pduel->write_buffer8(infos.phase);
+		pduel->write_buffer16(infos.phase);
 		raise_event((card*)0, EVENT_PHASE_START + PHASE_STANDBY, 0, 0, 0, turn_player, 0);
 		process_instant_event();
 		return FALSE;
 	}
 	case 5: {
-		if(core.new_fchain.size() || core.new_ochain.size() || core.instant_event.back().event_code != EVENT_PHASE_START + PHASE_STANDBY)
+		if(core.new_fchain.size() || core.new_ochain.size() || core.instant_event.size())
 			add_process(PROCESSOR_POINT_EVENT, 0, 0, 0, 0, 0);
 		add_process(PROCESSOR_PHASE_EVENT, 0, 0, 0, PHASE_STANDBY, 0);
 		return FALSE;
@@ -4016,8 +4023,7 @@ int32 field::process_turn(uint16 step, uint8 turn_player) {
 		core.quick_f_chain.clear();
 		core.delayed_quick_tmp.clear();
 		pduel->write_buffer8(MSG_NEW_PHASE);
-		pduel->write_buffer8(infos.phase);
-		
+		pduel->write_buffer16(infos.phase);
 		add_process(PROCESSOR_IDLE_COMMAND, 0, 0, 0, 0, 0);
 		return FALSE;
 	}
@@ -4031,23 +4037,16 @@ int32 field::process_turn(uint16 step, uint8 turn_player) {
 		core.battle_phase_action = FALSE;
 		core.battle_phase_count[infos.turn_player]++;
 		pduel->write_buffer8(MSG_NEW_PHASE);
-		pduel->write_buffer8(infos.phase);
-		pduel->write_buffer8(MSG_HINT);
-		pduel->write_buffer8(HINT_EVENT);
-		pduel->write_buffer8(infos.turn_player);
-		pduel->write_buffer32(28);
-		pduel->write_buffer8(MSG_HINT);
-		pduel->write_buffer8(HINT_EVENT);
-		pduel->write_buffer8(1 - infos.turn_player);
-		pduel->write_buffer32(28);
+		pduel->write_buffer16(infos.phase);
 		raise_event((card*)0, EVENT_PHASE_START + PHASE_BATTLE, 0, 0, 0, turn_player, 0);
 		process_instant_event();
 		adjust_all();
 		return FALSE;
 	}
 	case 10: {
-		core.hint_timing[infos.turn_player] = TIMING_BATTLE_START;
-		add_process(PROCESSOR_POINT_EVENT, 0, 0, 0, 0, 0);
+		if(core.new_fchain.size() || core.new_ochain.size() || core.instant_event.size())
+			add_process(PROCESSOR_POINT_EVENT, 0, 0, 0, 0, 0);
+		add_process(PROCESSOR_PHASE_EVENT, 0, 0, 0, PHASE_BATTLE_START, 0);
 		return FALSE;
 	}
 	case 11: {
@@ -4100,7 +4099,7 @@ int32 field::process_turn(uint16 step, uint8 turn_player) {
 		core.quick_f_chain.clear();
 		core.delayed_quick_tmp.clear();
 		pduel->write_buffer8(MSG_NEW_PHASE);
-		pduel->write_buffer8(infos.phase);
+		pduel->write_buffer16(infos.phase);
 		infos.can_shuffle = TRUE;
 		add_process(PROCESSOR_IDLE_COMMAND, 0, 0, 0, 0, 0);
 		return FALSE;
@@ -4110,7 +4109,7 @@ int32 field::process_turn(uint16 step, uint8 turn_player) {
 		infos.phase = PHASE_END;
 		core.phase_action = FALSE;
 		pduel->write_buffer8(MSG_NEW_PHASE);
-		pduel->write_buffer8(infos.phase);
+		pduel->write_buffer16(infos.phase);
 		raise_event((card*)0, EVENT_PHASE_START + PHASE_END, 0, 0, 0, turn_player, 0);
 		process_instant_event();
 		adjust_all();
