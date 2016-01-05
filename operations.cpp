@@ -69,12 +69,11 @@ void field::change_target(uint8 chaincount, group* targets) {
 	group* ot = core.current_chain[chaincount - 1].target_cards;
 	if(ot) {
 		effect* te = core.current_chain[chaincount - 1].triggering_effect;
-		uint16 chain_id = core.current_chain[chaincount - 1].chain_id;
 		for(auto cit = ot->container.begin(); cit != ot->container.end(); ++cit)
-			(*cit)->release_relation(chain_id);
+			(*cit)->release_relation(core.current_chain[chaincount - 1]);
 		ot->container = targets->container;
 		for(auto cit = ot->container.begin(); cit != ot->container.end(); ++cit)
-			(*cit)->create_relation(chain_id);
+			(*cit)->create_relation(core.current_chain[chaincount - 1]);
 		if(te->is_flag(EFFECT_FLAG_CARD_TARGET)) {
 			for(auto cit = ot->container.begin(); cit != ot->container.end(); ++cit) {
 				if((*cit)->current.location & 0x30)
@@ -601,8 +600,7 @@ int32 field::remove_counter(uint16 step, uint32 reason, card* pcard, uint8 rplay
 			core.select_options.push_back(10);
 			core.select_effects.push_back(0);
 		}
-		pair<effect_container::iterator, effect_container::iterator> pr;
-		pr = effects.continuous_effect.equal_range(EFFECT_RCOUNTER_REPLACE + countertype);
+		auto pr = effects.continuous_effect.equal_range(EFFECT_RCOUNTER_REPLACE + countertype);
 		effect* peffect;
 		tevent e;
 		e.event_cards = 0;

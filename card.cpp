@@ -72,7 +72,6 @@ card::card(duel* pd) {
 	assume_type = 0;
 	assume_value = 0;
 	spsummon_code = 0;
-	relate_effect_outside = 0;
 	current.controler = PLAYER_NONE;
 }
 card::~card() {
@@ -1075,11 +1074,11 @@ int32 card::add_effect(effect* peffect) {
 					remove_effect(rm->second);
 			}
 		}
-		it = single_effect.insert(make_pair(peffect->code, peffect));
+		it = single_effect.insert(std::make_pair(peffect->code, peffect));
 	} else if (peffect->type & EFFECT_TYPE_FIELD)
-		it = field_effect.insert(make_pair(peffect->code, peffect));
+		it = field_effect.insert(std::make_pair(peffect->code, peffect));
 	else if (peffect->type & EFFECT_TYPE_EQUIP) {
-		it = equip_effect.insert(make_pair(peffect->code, peffect));
+		it = equip_effect.insert(std::make_pair(peffect->code, peffect));
 		if (equiping_target)
 			check_target = equiping_target;
 		else
@@ -1102,7 +1101,7 @@ int32 card::add_effect(effect* peffect) {
 		if((peffect->reset_count & 0xff) > (pduel->game_field->core.reason_effect->reset_count & 0xff))
 			peffect->reset_count = (peffect->reset_count & 0xffffff00) | (pduel->game_field->core.reason_effect->reset_count & 0xff);
 	}
-	indexer.insert(make_pair(peffect, it));
+	indexer.insert(std::make_pair(peffect, it));
 	peffect->handler = this;
 	if((peffect->type & 0x7e0)
 		|| (pduel->game_field->core.reason_effect && (pduel->game_field->core.reason_effect->status & EFFECT_STATUS_ACTIVATED)))
@@ -1115,7 +1114,7 @@ int32 card::add_effect(effect* peffect) {
 	}
 	if(peffect->is_flag(EFFECT_FLAG_OATH)) {
 		effect* reason_effect = pduel->game_field->core.reason_effect;
-		pduel->game_field->effects.oath.insert(make_pair(peffect, reason_effect));
+		pduel->game_field->effects.oath.insert(std::make_pair(peffect, reason_effect));
 	}
 	if(peffect->reset_flag & RESET_PHASE) {
 		pduel->game_field->effects.pheff.insert(peffect);
@@ -1438,48 +1437,44 @@ void card::release_relation(card* target) {
 		return;
 	relations.erase(target);
 }
-void card::create_relation(uint16 chain_id) {
-	relate_effect.insert(chain_id);
+void card::create_relation(const chain& ch) {
+	relate_effect.insert(std::make_pair(ch.triggering_effect, ch.chain_id));
 }
-int32 card::is_has_relation(uint16 chain_id) {
-	if (relate_effect.find(chain_id) != relate_effect.end())
+int32 card::is_has_relation(const chain& ch) {
+	if (relate_effect.find(std::make_pair(ch.triggering_effect, ch.chain_id)) != relate_effect.end())
 		return TRUE;
 	return FALSE;
 }
-void card::release_relation(uint16 chain_id) {
-	relate_effect.erase(chain_id);
+void card::release_relation(const chain& ch) {
+	relate_effect.erase(std::make_pair(ch.triggering_effect, ch.chain_id));
 }
 void card::clear_relate_effect() {
 	relate_effect.clear();
-	relate_effect_outside = 0;
 }
 void card::create_relation(effect* peffect) {
 	for(auto it = pduel->game_field->core.current_chain.rbegin(); it != pduel->game_field->core.current_chain.rend(); ++it) {
 		if(it->triggering_effect == peffect) {
-			create_relation(it->chain_id);
+			create_relation(*it);
 			return;
 		}
 	}
-	relate_effect_outside = peffect;
+	relate_effect.insert(std::make_pair(peffect, (uint16)0));
 }
 int32 card::is_has_relation(effect* peffect) {
-	for(auto it = pduel->game_field->core.current_chain.rbegin(); it != pduel->game_field->core.current_chain.rend(); ++it) {
-		if(it->triggering_effect == peffect)
-			return is_has_relation(it->chain_id);
+	for(auto it = relate_effect.begin(); it != relate_effect.end(); ++it) {
+		if(it->first == peffect)
+			return TRUE;
 	}
-	if(relate_effect_outside == peffect)
-		return TRUE;
 	return FALSE;
 }
 void card::release_relation(effect* peffect) {
 	for(auto it = pduel->game_field->core.current_chain.rbegin(); it != pduel->game_field->core.current_chain.rend(); ++it) {
 		if(it->triggering_effect == peffect) {
-			release_relation(it->chain_id);
+			release_relation(*it);
 			return;
 		}
 	}
-	if(relate_effect_outside == peffect)
-		relate_effect_outside = 0;
+	relate_effect.erase(std::make_pair(peffect, (uint16)0));
 }
 int32 card::leave_field_redirect(uint32 reason) {
 	effect_set es;
