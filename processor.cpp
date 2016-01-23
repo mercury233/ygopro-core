@@ -2853,7 +2853,7 @@ int32 field::process_battle_command(uint16 step) {
 			return FALSE;
 		} else {
 			core.units.begin()->step = 39;
-			core.ctype = ctype;
+			core.units.begin()->arg1 = ctype;
 			pduel->write_buffer8(MSG_HINT);
 			pduel->write_buffer8(HINT_EVENT);
 			pduel->write_buffer8(1 - infos.turn_player);
@@ -3076,6 +3076,7 @@ int32 field::process_battle_command(uint16 step) {
 		}
 		if(atk_disabled || !core.attacker->is_capable_attack() || core.attacker->is_status(STATUS_ATTACK_CANCELED)
 		        || core.attacker->current.controler != acon || core.attacker->fieldid_r != afid) {
+			core.chain_attack = FALSE;
 			if(core.attacker->fieldid_r == afid) {
 				core.attacker->announce_count++;
 				core.attacker->announced_cards.addcard(core.attack_target);
@@ -3631,7 +3632,6 @@ int32 field::process_battle_command(uint16 step) {
 				cait->triggering_effect->handler->set_status(STATUS_CHAINING, FALSE);
 			add_process(PROCESSOR_SOLVE_CHAIN, 0, 0, 0, FALSE, 0);
 			core.units.begin()->step = -1;
-			core.ctype = 0;
 			return FALSE;
 		}
 		reset_phase(PHASE_BATTLE_STEP);
@@ -3639,8 +3639,7 @@ int32 field::process_battle_command(uint16 step) {
 		return FALSE;
 	}
 	case 41: {
-		core.units.begin()->arg1 = core.ctype;
-		core.ctype = 0;
+		// normal end of battle step
 		if(is_player_affected_by_effect(infos.turn_player, EFFECT_BP_TWICE))
 			core.units.begin()->arg2 = 1;
 		else 
@@ -4095,7 +4094,7 @@ int32 field::process_turn(uint16 step, uint8 turn_player) {
 		return FALSE;
 	}
 	case 12: {
-		if(core.units.begin()->arg2 == 0 && returns.ivalue[1]) { // 2nd Battle Step
+		if(core.units.begin()->arg2 == 0 && returns.ivalue[1]) { // 2nd Battle Phase
 			core.units.begin()->arg2 = 1;
 			core.units.begin()->step = 8;
 			for(uint8 p = 0; p < 2; ++p) {
