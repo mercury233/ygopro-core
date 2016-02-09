@@ -89,6 +89,9 @@ int32 scriptlib::card_is_fusion_code(lua_State *L) {
 	uint32 code1 = pcard->get_code();
 	uint32 code2 = pcard->get_another_code();
 	std::unordered_set<uint32> fcode;
+	fcode.insert(code1);
+	if(code2)
+		fcode.insert(code2);
 	for(int32 i = 0; i < eset.size(); ++i)
 		fcode.insert(eset[i]->get_value(pcard));
 	uint32 count = lua_gettop(L) - 1;
@@ -97,7 +100,7 @@ int32 scriptlib::card_is_fusion_code(lua_State *L) {
 		if(lua_isnil(L, i + 2))
 			continue;
 		uint32 tcode = lua_tointeger(L, i + 2);
-		if(code1 == tcode || (code2 && code2 == tcode) || fcode.find(tcode) != fcode.end()) {
+		if(fcode.find(tcode) != fcode.end()) {
 			result = TRUE;
 			break;
 		}
@@ -2219,6 +2222,10 @@ int32 scriptlib::card_set_unique_onfield(lua_State *L) {
 	pcard->unique_pos[0] = lua_tointeger(L, 2);
 	pcard->unique_pos[1] = lua_tointeger(L, 3);
 	pcard->unique_code = lua_tointeger(L, 4);
+	uint32 location = LOCATION_ONFIELD;
+	if(lua_gettop(L) > 4)
+		location = lua_tointeger(L, 5) & LOCATION_ONFIELD;
+	pcard->unique_location = location;
 	effect* peffect = pcard->pduel->new_effect();
 	peffect->owner = pcard;
 	peffect->type = EFFECT_TYPE_SINGLE;
@@ -2226,7 +2233,7 @@ int32 scriptlib::card_set_unique_onfield(lua_State *L) {
 	peffect->flag[0] = EFFECT_FLAG_COPY_INHERIT;
 	pcard->add_effect(peffect);
 	pcard->unique_effect = peffect;
-	if(pcard->current.location & LOCATION_ONFIELD)
+	if(pcard->current.location & location)
 		pcard->pduel->game_field->add_unique_card(pcard);
 	return 0;
 }
@@ -2235,7 +2242,10 @@ int32 scriptlib::card_check_unique_onfield(lua_State *L) {
 	check_param(L, PARAM_TYPE_CARD, 1);
 	card* pcard = *(card**) lua_touserdata(L, 1);
 	uint32 check_player = lua_tointeger(L, 2);
-	lua_pushboolean(L, pcard->pduel->game_field->check_unique_onfield(pcard, check_player) ? 0 : 1);
+	uint32 check_location = LOCATION_ONFIELD;
+	if(lua_gettop(L) > 2)
+		check_location = lua_tointeger(L, 3) & LOCATION_ONFIELD;
+	lua_pushboolean(L, pcard->pduel->game_field->check_unique_onfield(pcard, check_player, check_location) ? 0 : 1);
 	return 1;
 }
 int32 scriptlib::card_reset_negate_effect(lua_State *L) {
