@@ -2222,6 +2222,21 @@ int32 scriptlib::duel_release_ritual_material(lua_State *L) {
 	pgroup->pduel->game_field->ritual_release(&pgroup->container);
 	return lua_yield(L, 0);
 }
+int32 scriptlib::duel_set_must_select_cards(lua_State *L) {
+	check_param_count(L, 1);
+	if(check_param(L, PARAM_TYPE_CARD, 1, TRUE)) {
+		card* pcard = *(card**) lua_touserdata(L, 1);
+		duel* pduel = pcard->pduel;
+		pduel->game_field->core.must_select_cards.clear();
+		pduel->game_field->core.must_select_cards.push_back(pcard);
+	} else if(check_param(L, PARAM_TYPE_GROUP, 1, TRUE)) {
+		group* pgroup = *(group**) lua_touserdata(L, 1);
+		duel* pduel = pgroup->pduel;
+		pduel->game_field->core.must_select_cards.assign(pgroup->container.begin(), pgroup->container.end());
+	} else
+		luaL_error(L, "Parameter %d should be \"Card\" or \"Group\".", 1);
+	return 0;
+}
 int32 scriptlib::duel_set_target_card(lua_State *L) {
 	check_action_permission(L);
 	check_param_count(L, 1);
@@ -3255,7 +3270,7 @@ int32 scriptlib::duel_venom_swamp_check(lua_State *L) {
 	for (int32 i = 0; i < eset.size(); ++i) {
 		switch (eset[i]->code) {
 		case EFFECT_UPDATE_ATTACK: {
-			if (eset[i]->type & EFFECT_TYPE_SINGLE && !(eset[i]->is_flag(EFFECT_FLAG_SINGLE_RANGE)))
+			if (eset[i]->type & EFFECT_TYPE_SINGLE && !eset[i]->is_flag(EFFECT_FLAG_SINGLE_RANGE))
 				up += eset[i]->get_value(pcard);
 			else
 				upc += eset[i]->get_value(pcard);
@@ -3265,11 +3280,11 @@ int32 scriptlib::duel_venom_swamp_check(lua_State *L) {
 		}
 		case EFFECT_SET_ATTACK:
 			base = eset[i]->get_value(pcard);
-			if (eset[i]->type & EFFECT_TYPE_SINGLE && !(eset[i]->is_flag(EFFECT_FLAG_SINGLE_RANGE)))
+			if (eset[i]->type & EFFECT_TYPE_SINGLE && !eset[i]->is_flag(EFFECT_FLAG_SINGLE_RANGE))
 				up = 0;
 			break;
 		case EFFECT_SET_ATTACK_FINAL:
-			if (eset[i]->type & EFFECT_TYPE_SINGLE && !(eset[i]->is_flag(EFFECT_FLAG_SINGLE_RANGE))) {
+			if (eset[i]->type & EFFECT_TYPE_SINGLE && !eset[i]->is_flag(EFFECT_FLAG_SINGLE_RANGE)) {
 				base = eset[i]->get_value(pcard);
 				up = 0;
 				upc = 0;
@@ -3314,7 +3329,7 @@ int32 scriptlib::duel_majestic_copy(lua_State *L) {
 		}
 		effect* peffect = eit->second;
 		if(!(peffect->type & 0x7c)) continue;
-		if(!(peffect->is_flag(EFFECT_FLAG_INITIAL))) continue;
+		if(!peffect->is_flag(EFFECT_FLAG_INITIAL)) continue;
 		effect* ceffect = pduel->new_effect();
 		int32 ref = ceffect->ref_handle;
 		*ceffect = *peffect;

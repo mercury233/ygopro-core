@@ -749,7 +749,7 @@ void field::add_effect(effect* peffect, uint8 owner_player) {
 			it = effects.continuous_effect.insert(std::make_pair(peffect->code, peffect));
 	}
 	effects.indexer.insert(std::make_pair(peffect, it));
-	if((peffect->is_flag(EFFECT_FLAG_FIELD_ONLY))) {
+	if(peffect->is_flag(EFFECT_FLAG_FIELD_ONLY)) {
 		if(peffect->is_flag(EFFECT_FLAG_OATH))
 			effects.oath.insert(std::make_pair(peffect, core.reason_effect));
 		if(peffect->reset_flag & RESET_PHASE)
@@ -786,7 +786,7 @@ void field::remove_effect(effect* peffect) {
 			effects.continuous_effect.erase(it);
 	}
 	effects.indexer.erase(peffect);
-	if((peffect->is_flag(EFFECT_FLAG_FIELD_ONLY))) {
+	if(peffect->is_flag(EFFECT_FLAG_FIELD_ONLY)) {
 		if(peffect->is_flag(EFFECT_FLAG_OATH))
 			effects.oath.erase(peffect);
 		if(peffect->reset_flag & RESET_PHASE)
@@ -817,7 +817,7 @@ void field::reset_effect(uint32 id, uint32 reset_type) {
 		auto rm = it++;
 		auto peffect = rm->first;
 		auto pit = rm->second;
-		if (!(peffect->is_flag(EFFECT_FLAG_FIELD_ONLY)))
+		if (!peffect->is_flag(EFFECT_FLAG_FIELD_ONLY))
 			continue;
 		result = peffect->reset(id, reset_type);
 		if (result) {
@@ -898,7 +898,7 @@ void field::filter_field_effect(uint32 code, effect_set* eset, uint8 sort) {
 		eset->sort();
 }
 void field::filter_affected_cards(effect* peffect, card_set* cset) {
-	if ((peffect->type & EFFECT_TYPE_ACTIONS) || !(peffect->type & EFFECT_TYPE_FIELD) || (peffect->is_flag(EFFECT_FLAG_PLAYER_TARGET)))
+	if ((peffect->type & EFFECT_TYPE_ACTIONS) || !(peffect->type & EFFECT_TYPE_FIELD) || peffect->is_flag(EFFECT_FLAG_PLAYER_TARGET))
 		return;
 	uint8 self = peffect->get_handler_player();
 	if(self == PLAYER_NONE)
@@ -1261,7 +1261,7 @@ int32 field::get_summon_release_list(card* target, card_set* release_list, card_
 			rcount += pcard->operation_param;
 		} else {
 			effect* peffect = pcard->is_affected_by_effect(EFFECT_EXTRA_RELEASE_SUM);
-			if(!peffect || ((peffect->is_flag(EFFECT_FLAG_COUNT_LIMIT)) && (peffect->reset_count & 0xf00) == 0))
+			if(!peffect || (peffect->is_flag(EFFECT_FLAG_COUNT_LIMIT) && (peffect->reset_count & 0xf00) == 0))
 				continue;
 			if(ex_list_sum)
 				ex_list_sum->insert(pcard);
@@ -1459,6 +1459,8 @@ void field::adjust_self_destroy_set() {
 		if((!pcard->is_status(STATUS_DISABLED) && (peffect = check_unique_onfield(pcard, pcard->current.controler, pcard->current.location)))
 		        || (peffect = pcard->is_affected_by_effect(EFFECT_SELF_DESTROY))) {
 			core.self_destroy_set.insert(pcard);
+			pcard->temp.reason_effect = pcard->current.reason_effect;
+			pcard->temp.reason_player = pcard->current.reason_player;
 			pcard->current.reason_effect = peffect;
 			pcard->current.reason_player = peffect->get_handler_player();
 		}
@@ -1468,6 +1470,8 @@ void field::adjust_self_destroy_set() {
 			card* pcard = *cit;
 			if(peffect = pcard->is_affected_by_effect(EFFECT_SELF_TOGRAVE)) {
 				core.self_tograve_set.insert(pcard);
+				pcard->temp.reason_effect = pcard->current.reason_effect;
+				pcard->temp.reason_player = pcard->current.reason_player;
 				pcard->current.reason_effect = peffect;
 				pcard->current.reason_player = peffect->get_handler_player();
 			}
@@ -1963,6 +1967,35 @@ int32 field::check_with_sum_limit_m(const card_vector& mats, int32 acc, int32 in
 		return TRUE;
 	return FALSE;
 }
+int32 field::check_with_sum_greater_limit(const card_vector& mats, int32 acc, int32 index, int32 opmin) {
+	while(index < (int32)mats.size()) {
+		int32 op1 = mats[index]->operation_param & 0xffff;
+		int32 op2 = (mats[index]->operation_param >> 16) & 0xffff;
+		if((acc <= op1 && acc + opmin > op1) || (op2 && acc <= op2 && acc + opmin > op2))
+			return TRUE;
+		index++;
+		if(check_with_sum_greater_limit(mats, acc - op1, index, std::min(opmin, op1)))
+			return TRUE;
+		if(op2 && check_with_sum_greater_limit(mats, acc - op2, index, std::min(opmin, op2)))
+			return TRUE;
+	}
+	return FALSE;
+}
+int32 field::check_with_sum_greater_limit_m(const card_vector& mats, int32 acc, int32 index, int32 opmin, int32 must_count) {
+	if(acc <= 0)
+		return index == must_count && acc + opmin > 0;
+	if(index == must_count)
+		return check_with_sum_greater_limit(mats, acc, index, opmin);
+	if(index >= (int32)mats.size())
+		return FALSE;
+	int32 op1 = mats[index]->operation_param & 0xffff;
+	int32 op2 = (mats[index]->operation_param >> 16) & 0xffff;
+	if(check_with_sum_greater_limit_m(mats, acc - op1, index + 1, std::min(opmin, op1), must_count))
+		return TRUE;
+	if(op2 && check_with_sum_greater_limit_m(mats, acc - op2, index + 1, std::min(opmin, op2), must_count))
+		return TRUE;
+	return FALSE;
+}
 int32 field::check_xyz_material(card* scard, int32 findex, int32 lv, int32 min, int32 max, group* mg) {
 	get_xyz_material(scard, findex, lv, max, mg);
 	return (int32)core.xmaterial_lst.size() >= min;
@@ -2309,7 +2342,7 @@ int32 field::check_chain_target(uint8 chaincount, card * pcard) {
 		pchain = &core.current_chain[chaincount - 1];
 	effect* peffect = pchain->triggering_effect;
 	uint8 tp = pchain->triggering_player;
-	if(!(peffect->is_flag(EFFECT_FLAG_CARD_TARGET)) || !peffect->target)
+	if(!peffect->is_flag(EFFECT_FLAG_CARD_TARGET) || !peffect->target)
 		return FALSE;
 	if(!pcard->is_capable_be_effect_target(peffect, tp))
 		return false;

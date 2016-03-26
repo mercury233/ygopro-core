@@ -437,6 +437,7 @@ static const struct luaL_Reg duellib[] = {
 	{ "CheckTunerMaterial", scriptlib::duel_check_tuner_material },
 	{ "GetRitualMaterial", scriptlib::duel_get_ritual_material },
 	{ "ReleaseRitualMaterial", scriptlib::duel_release_ritual_material },
+	{ "SetSelectedCard", scriptlib::duel_set_must_select_cards },
 	{ "SetTargetCard", scriptlib::duel_set_target_card },
 	{ "ClearTargetCard", scriptlib::duel_clear_target_card },
 	{ "SetTargetPlayer", scriptlib::duel_set_target_player },
@@ -609,7 +610,7 @@ void interpreter::unregister_effect(effect *peffect) {
 		luaL_unref(lua_state, LUA_REGISTRYINDEX, peffect->target);
 	if(peffect->operation)
 		luaL_unref(lua_state, LUA_REGISTRYINDEX, peffect->operation);
-	if(peffect->value && (peffect->is_flag(EFFECT_FLAG_FUNC_VALUE)))
+	if(peffect->value && peffect->is_flag(EFFECT_FLAG_FUNC_VALUE))
 		luaL_unref(lua_state, LUA_REGISTRYINDEX, peffect->value);
 	luaL_unref(lua_state, LUA_REGISTRYINDEX, peffect->ref_handle);
 	peffect->ref_handle = 0;

@@ -981,8 +981,15 @@ int32 scriptlib::card_register_effect(lua_State *L) {
 	int32 id;
 	if (peffect->handler)
 		id = -1;
-	else
+	else {
+		if((peffect->type & (EFFECT_TYPE_TRIGGER_O | EFFECT_TYPE_TRIGGER_F)) 
+				&& !(peffect->code & 0x10032000) && (peffect->code & EVENT_PHASE)
+				&& !peffect->is_flag(EFFECT_FLAG_COUNT_LIMIT)) {
+			peffect->flag[0] |= EFFECT_FLAG_COUNT_LIMIT;
+			peffect->reset_count |= ((1 << 12) & 0xf000) | ((1 << 8) & 0xf00);
+		}
 		id = pcard->add_effect(peffect);
+	}
 	lua_pushinteger(L, id);
 	return 1;
 }
@@ -1069,7 +1076,7 @@ int32 scriptlib::card_set_flag_effect_label(lua_State *L) {
 	check_param_count(L, 3);
 	check_param(L, PARAM_TYPE_CARD, 1);
 	card* pcard = *(card**) lua_touserdata(L, 1);
-	int32 code = (lua_tointeger(L, 2) & 0xfffffff) | 0x10000000;
+	uint32 code = (lua_tounsigned(L, 2) & 0xfffffff) | 0x10000000;
 	int lab = lua_tointeger(L, 3);
 	auto eit = pcard->single_effect.find(code);
 	if(eit == pcard->single_effect.end())
@@ -1084,13 +1091,18 @@ int32 scriptlib::card_get_flag_effect_label(lua_State *L) {
 	check_param_count(L, 2);
 	check_param(L, PARAM_TYPE_CARD, 1);
 	card* pcard = *(card**) lua_touserdata(L, 1);
-	int32 code = (lua_tointeger(L, 2) & 0xfffffff) | 0x10000000;
-	auto eit = pcard->single_effect.find(code);
-	if(eit == pcard->single_effect.end())
+	uint32 code = (lua_tounsigned(L, 2) & 0xfffffff) | 0x10000000;
+	auto rg = pcard->single_effect.equal_range(code);
+	int32 count = 0;
+	for(; rg.first != rg.second; ++rg.first) {
+		lua_pushinteger(L, rg.first->second->label);
+		count++;
+	}
+	if(!count) {
 		lua_pushnil(L);
-	else
-		lua_pushinteger(L, eit->second->label);
-	return 1;
+		return 1;
+	}
+	return count;
 }
 int32 scriptlib::card_create_relation(lua_State *L) {
 	check_param_count(L, 3);
@@ -1858,6 +1870,7 @@ int32 scriptlib::card_remove_counter(lua_State *L) {
 	uint32 count = lua_tointeger(L, 4);
 	uint32 reason = lua_tointeger(L, 5);
 	if(countertype == 0) {
+		// c38834303
 		for(auto cmit = pcard->counters.begin(); cmit != pcard->counters.end(); ++cmit) {
 			pcard->pduel->write_buffer8(MSG_REMOVE_COUNTER);
 			pcard->pduel->write_buffer16(cmit->first);
