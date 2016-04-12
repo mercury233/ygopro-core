@@ -177,7 +177,7 @@ uint32 card::get_infos(byte* buf, int32 query_flag, int32 use_cache) {
 	if(query_flag & QUERY_OWNER)
 		*p++ = owner;
 	if(query_flag & QUERY_IS_DISABLED) {
-		tdata = (status & STATUS_DISABLED) ? 1 : 0;
+		tdata = (status & (STATUS_DISABLED | STATUS_FORBIDDEN)) ? 1 : 0;
 		if(!use_cache || (tdata != q_cache.is_disabled)) {
 			q_cache.is_disabled = tdata;
 			*p++ = tdata;
@@ -498,7 +498,7 @@ void card::calc_attack_defence(int32 *patk, int32 *pdef) {
 	int32 rev = FALSE;
 	if (is_affected_by_effect(EFFECT_REVERSE_UPDATE))
 		rev = TRUE;
-	effect_set effects_atk, effects_def;
+	effect_set effects_atk, effects_def, effects_atk_r, effects_def_r;
 	int32 swap_final = FALSE;
 	for (int32 i = 0; i < eset.size(); ++i) {
 		switch (eset[i]->code) {
@@ -518,8 +518,11 @@ void card::calc_attack_defence(int32 *patk, int32 *pdef) {
 				base_atk = eset[i]->get_value(this);
 				up_atk = 0;
 				upc_atk = 0;
-			} else
+			} else {
 				effects_atk.add_item(eset[i]);
+				if(eset[i]->is_flag(EFFECT_FLAG_REPEAT))
+					effects_atk_r.add_item(eset[i]);
+			}
 			break;
 		case EFFECT_UPDATE_DEFENCE:
 			if ((eset[i]->type & EFFECT_TYPE_SINGLE) && !eset[i]->is_flag(EFFECT_FLAG_SINGLE_RANGE))
@@ -537,8 +540,11 @@ void card::calc_attack_defence(int32 *patk, int32 *pdef) {
 				base_def = eset[i]->get_value(this);
 				up_def = 0;
 				upc_def = 0;
-			} else
+			} else {
 				effects_def.add_item(eset[i]);
+				if(eset[i]->is_flag(EFFECT_FLAG_REPEAT))
+					effects_def_r.add_item(eset[i]);
+			}
 			break;
 		case EFFECT_SWAP_AD:
 			if ((eset[i]->type & EFFECT_TYPE_SINGLE) && !eset[i]->is_flag(EFFECT_FLAG_SINGLE_RANGE)) {
@@ -575,6 +581,8 @@ void card::calc_attack_defence(int32 *patk, int32 *pdef) {
 	if (patk) {
 		for (int32 i = 0; i < effects_atk.size(); ++i)
 			temp.attack = effects_atk[i]->get_value(this);
+		for(int32 i = 0; i < effects_atk_r.size(); ++i)
+			temp.attack = effects_atk_r[i]->get_value(this);
 		int32 atk = temp.attack;
 		if (atk < 0)
 			atk = 0;
@@ -583,6 +591,8 @@ void card::calc_attack_defence(int32 *patk, int32 *pdef) {
 	if (pdef) {
 		for (int32 i = 0; i < effects_def.size(); ++i)
 			temp.defence = effects_def[i]->get_value(this);
+		for(int32 i = 0; i < effects_def_r.size(); ++i)
+			temp.defence = effects_def_r[i]->get_value(this);
 		int32 def = temp.defence;
 		if (def < 0)
 			def = 0;
@@ -1025,7 +1035,7 @@ void card::enable_field_effect(bool enabled) {
 	} else
 		set_status(STATUS_EFFECT_ENABLED, FALSE);
 	filter_immune_effect();
-	if (get_status(STATUS_DISABLED))
+	if (get_status(STATUS_DISABLED | STATUS_FORBIDDEN))
 		return;
 	filter_disable_related_cards();
 }
@@ -1149,7 +1159,7 @@ void card::remove_effect(effect* peffect, effect_container::iterator it) {
 		single_effect.erase(it);
 	else if (peffect->type & EFFECT_TYPE_FIELD) {
 		check_target = 0;
-		if (peffect->in_range(current.location, current.sequence) && get_status(STATUS_EFFECT_ENABLED) && !get_status(STATUS_DISABLED)) {
+		if (peffect->in_range(current.location, current.sequence) && get_status(STATUS_EFFECT_ENABLED) && !get_status(STATUS_DISABLED | STATUS_FORBIDDEN)) {
 			if (peffect->is_disable_related())
 				pduel->game_field->update_disable_check_list(peffect);
 		}
@@ -1163,7 +1173,7 @@ void card::remove_effect(effect* peffect, effect_container::iterator it) {
 		else
 			check_target = 0;
 	}
-	if ((current.controler != PLAYER_NONE) && !get_status(STATUS_DISABLED) && check_target) {
+	if ((current.controler != PLAYER_NONE) && !get_status(STATUS_DISABLED | STATUS_FORBIDDEN) && check_target) {
 		if (peffect->is_disable_related())
 			pduel->game_field->add_to_disable_check_list(check_target);
 	}
@@ -1391,7 +1401,19 @@ void card::reset_effect_count() {
 	}
 }
 // refresh STATUS_DISABLED based on EFFECT_DISABLE and EFFECT_CANNOT_DISABLE
-int32 card::refresh_disable_status() {
+// refresh STATUS_FORBIDDEN based on EFFECT_FORBIDDEN
+void card::refresh_disable_status() {
+	// forbidden
+	int32 pre_fb = is_status(STATUS_FORBIDDEN);
+	filter_immune_effect();
+	if (is_affected_by_effect(EFFECT_FORBIDDEN))
+		set_status(STATUS_FORBIDDEN, TRUE);
+	else
+		set_status(STATUS_FORBIDDEN, FALSE);
+	int32 cur_fb = is_status(STATUS_FORBIDDEN);
+	if(pre_fb != cur_fb)
+		filter_immune_effect();
+	// disabled
 	int32 pre_dis = is_status(STATUS_DISABLED);
 	filter_immune_effect();
 	if (!is_affected_by_effect(EFFECT_CANNOT_DISABLE) && is_affected_by_effect(EFFECT_DISABLE))
@@ -1401,7 +1423,6 @@ int32 card::refresh_disable_status() {
 	int32 cur_dis = is_status(STATUS_DISABLED);
 	if(pre_dis != cur_dis)
 		filter_immune_effect();
-	return is_status(STATUS_DISABLED);
 }
 uint8 card::refresh_control_status() {
 	uint8 final = owner;
@@ -1516,6 +1537,8 @@ int32 card::destination_redirect(uint8 destination, uint32 reason) {
 	}
 	return 0;
 }
+// cmit->second[0]: permanent
+// cmit->second[1]: reset while negated
 int32 card::add_counter(uint8 playerid, uint16 countertype, uint16 count, uint8 singly) {
 	if(!is_can_add_counter(playerid, countertype, count, singly))
 		return FALSE;
