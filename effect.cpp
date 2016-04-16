@@ -59,7 +59,7 @@ int32 effect::is_disable_related() {
 }
 int32 effect::is_can_be_forbidden() {
 	uint32 ctr = code & 0xf0000;
-	if (is_flag(EFFECT_FLAG_CANNOT_DISABLE) && !is_flag(EFFECT_FLAG_CANNOT_NEGATED))
+	if (is_flag(EFFECT_FLAG_CANNOT_DISABLE) && !is_flag(EFFECT_FLAG_CANNOT_NEGATE))
 		return FALSE;
 	if (code == EFFECT_CHANGE_CODE || ctr == EFFECT_COUNTER_PERMIT || ctr == EFFECT_COUNTER_LIMIT)
 		return FALSE;
@@ -194,7 +194,8 @@ int32 effect::is_activateable(uint8 playerid, const tevent& e, int32 neglect_con
 					if((handler->data.type & TYPE_SPELL) && (handler->data.type & TYPE_QUICKPLAY))
 						return FALSE;
 				}
-			}
+			} else
+				return FALSE;
 			int32 ecode = 0;
 			if(handler->current.location == LOCATION_HAND) {
 				if(handler->data.type & TYPE_TRAP)

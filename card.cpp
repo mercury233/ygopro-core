@@ -603,13 +603,19 @@ void card::calc_attack_defence(int32 *patk, int32 *pdef) {
 	temp.base_defence = -1;
 	temp.defence = -1;
 }
+// Level/Attribute/Race is available for:
+// 1. cards in LOCATION_MZONE or
+// 2. cards with original type TYPE_MONSTER or
+// 3. cards with current type TYPE_MONSTER(Ex. c87772572)
+// They can be changed for cards satisfying 1 or 2 or current type TYPE_TRAPMONSTER.
+// This is because some Phantom Knights is changed into TYPE_MONSTER but is not affected by Zombie World.
 uint32 card::get_level() {
 	if((data.type & TYPE_XYZ) || (status & STATUS_NO_LEVEL) 
 	        || (current.location != LOCATION_MZONE && !(data.type & TYPE_MONSTER) && !(get_type() & TYPE_MONSTER)))
 		return 0;
 	if(assume_type == ASSUME_LEVEL)
 		return assume_value;
-	if(!(current.location & LOCATION_MZONE) && !(data.type & TYPE_MONSTER))
+	if(current.location != LOCATION_MZONE && !(data.type & TYPE_MONSTER) && !(get_type() & TYPE_TRAPMONSTER))
 		return data.level;
 	if (temp.level != 0xffffffff)
 		return temp.level;
@@ -733,12 +739,13 @@ uint32 card::check_xyz_level(card* pcard, uint32 lv) {
 		return (lev >> 16) & 0xffff;
 	return 0;
 }
+// see get_level()
 uint32 card::get_attribute() {
 	if(assume_type == ASSUME_ATTRIBUTE)
 		return assume_value;
 	if(current.location != LOCATION_MZONE && !(data.type & TYPE_MONSTER) && !(get_type() & TYPE_MONSTER))
 		return 0;
-	if(!(current.location & (LOCATION_MZONE)) && !(data.type & TYPE_MONSTER) && !(get_type() & TYPE_TRAPMONSTER))
+	if(current.location != LOCATION_MZONE && !(data.type & TYPE_MONSTER) && !(get_type() & TYPE_TRAPMONSTER))
 		return data.attribute;
 	if (temp.attribute != 0xffffffff)
 		return temp.attribute;
@@ -763,12 +770,13 @@ uint32 card::get_attribute() {
 	temp.attribute = 0xffffffff;
 	return attribute;
 }
+// see get_level()
 uint32 card::get_race() {
 	if(assume_type == ASSUME_RACE)
 		return assume_value;
 	if(current.location != LOCATION_MZONE && !(data.type & TYPE_MONSTER) && !(get_type() & TYPE_MONSTER))
 		return 0;
-	if(!(current.location & (LOCATION_MZONE)) && !(data.type & TYPE_MONSTER) && !(get_type() & TYPE_TRAPMONSTER))
+	if(current.location != LOCATION_MZONE && !(data.type & TYPE_MONSTER) && !(get_type() & TYPE_TRAPMONSTER))
 		return data.race;
 	if (temp.race != 0xffffffff)
 		return temp.race;
@@ -1265,7 +1273,7 @@ int32 card::replace_effect(uint32 code, uint32 reset, uint32 count) {
 		auto rm = i++;
 		effect* peffect = rm->first;
 		auto it = rm->second;
-		if(peffect->is_flag(EFFECT_FLAG_INITIAL))
+		if(peffect->is_flag(EFFECT_FLAG_INITIAL | EFFECT_FLAG_COPY_INHERIT))
 			remove_effect(peffect, it);
 	}
 	uint32 cr = pduel->game_field->core.copy_reset;
@@ -1542,9 +1550,7 @@ int32 card::destination_redirect(uint8 destination, uint32 reason) {
 int32 card::add_counter(uint8 playerid, uint16 countertype, uint16 count, uint8 singly) {
 	if(!is_can_add_counter(playerid, countertype, count, singly))
 		return FALSE;
-	uint16 cttype = countertype;
-	if((countertype & COUNTER_NEED_ENABLE) && !(countertype & COUNTER_NEED_PERMIT))
-		cttype &= 0xfff;
+	uint16 cttype = countertype & ~COUNTER_NEED_ENABLE;
 	auto pr = counters.insert(std::make_pair(cttype, counter_map::mapped_type()));
 	auto cmit = pr.first;
 	if(pr.second) {
@@ -1564,7 +1570,7 @@ int32 card::add_counter(uint8 playerid, uint16 countertype, uint16 count, uint8 
 				pcount = mcount;
 		}
 	}
-	if(!(countertype & COUNTER_NEED_ENABLE))
+	if((countertype & COUNTER_WITHOUT_PERMIT) && !(countertype & COUNTER_NEED_ENABLE))
 		cmit->second[0] += pcount;
 	else
 		cmit->second[1] += pcount;
@@ -1608,11 +1614,9 @@ int32 card::is_can_add_counter(uint8 playerid, uint16 countertype, uint16 count,
 		return FALSE;
 	if((countertype & COUNTER_NEED_ENABLE) && is_status(STATUS_DISABLED))
 		return FALSE;
-	if((countertype & COUNTER_NEED_PERMIT) && !is_affected_by_effect(EFFECT_COUNTER_PERMIT + (countertype & 0xffff)))
+	if(!(countertype & COUNTER_WITHOUT_PERMIT) && !is_affected_by_effect(EFFECT_COUNTER_PERMIT + (countertype & 0xffff)))
 		return FALSE;
-	uint16 cttype = countertype;
-	if((countertype & COUNTER_NEED_ENABLE) && !(countertype & COUNTER_NEED_PERMIT))
-		cttype &= 0xfff;
+	uint16 cttype = countertype & ~COUNTER_NEED_ENABLE;
 	int32 limit = -1;
 	int32 cur = 0;
 	auto cmit = counters.find(cttype);
