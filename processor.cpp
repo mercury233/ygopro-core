@@ -440,7 +440,7 @@ int32 field::process() {
 		return pduel->bufferlen;
 	}
 	case PROCESSOR_GET_CONTROL: {
-		if (get_control(it->step, it->peffect, (it->arg2 >> 28) & 0xf, (card*)it->ptarget, (it->arg2 >> 24) & 0xf, (it->arg2 >> 8) & 0x3ff, it->arg2 & 0xff)) {
+		if (get_control(it->step, it->peffect, (it->arg2 >> 28) & 0xf, it->ptarget, (it->arg2 >> 24) & 0xf, (it->arg2 >> 8) & 0x3ff, it->arg2 & 0xff)) {
 			core.units.pop_front();
 		} else
 			it->step++;
@@ -934,7 +934,7 @@ int32 field::process() {
 			add_process(PROCESSOR_GET_CONTROL, 0, it->peffect, it->ptarget, it->arg1, it->arg2);
 			it->step++;
 		} else {
-			pduel->lua->add_param(returns.ivalue[0], PARAM_TYPE_BOOLEAN);
+			pduel->lua->add_param(returns.ivalue[0], PARAM_TYPE_INT);
 			core.units.pop_front();
 		}
 		return pduel->bufferlen;
@@ -3496,7 +3496,7 @@ int32 field::process_battle_command(uint16 step) {
 	case 29: {
 		core.selfdes_disabled = FALSE;
 		if(core.battle_destroy_rep.size())
-			destroy(&core.battle_destroy_rep, 0, REASON_EFFECT, PLAYER_NONE);
+			destroy(&core.battle_destroy_rep, 0, REASON_EFFECT | REASON_REPLACE, PLAYER_NONE);
 		if(core.desrep_chain.size())
 			add_process(PROCESSOR_OPERATION_REPLACE, 15, 0, 0, 0, 0);
 		adjust_all();
