@@ -1022,11 +1022,11 @@ int32 field::process() {
 			if(core.global_flag & GLOBALFLAG_DECK_REVERSE_CHECK) {
 				if(count > 0) {
 					card* ptop = player[target_player].list_main.back();
-					if(core.deck_reversed || (ptop->current.position == POS_FACEUP_DEFENCE)) {
+					if(core.deck_reversed || (ptop->current.position == POS_FACEUP_DEFENSE)) {
 						pduel->write_buffer8(MSG_DECK_TOP);
 						pduel->write_buffer8(target_player);
 						pduel->write_buffer8(0);
-						if(ptop->current.position != POS_FACEUP_DEFENCE)
+						if(ptop->current.position != POS_FACEUP_DEFENSE)
 							pduel->write_buffer32(ptop->data.code);
 						else
 							pduel->write_buffer32(ptop->data.code | 0x80000000);
@@ -2438,6 +2438,7 @@ int32 field::process_idle_command(uint16 step) {
 	case 0: {
 		card* pcard;
 		effect* peffect;
+		bool must_attack = false;
 		core.select_chains.clear();
 		chain newchain;
 		nil_event.event_code = EVENT_FREE_CHAIN;
@@ -2445,8 +2446,17 @@ int32 field::process_idle_command(uint16 step) {
 		core.to_ep = TRUE;
 		if((!(core.duel_options & DUEL_ATTACK_FIRST_TURN) && infos.turn_id == 1) || infos.phase == PHASE_MAIN2 || is_player_affected_by_effect(infos.turn_player, EFFECT_CANNOT_BP))
 			core.to_bp = FALSE;
-		if(core.to_bp && infos.phase == PHASE_MAIN1 && is_player_affected_by_effect(infos.turn_player, EFFECT_CANNOT_EP))
-			core.to_ep = FALSE;
+		if(infos.phase == PHASE_MAIN1) {
+			for(uint32 i = 0; i < 5; ++i) {
+				pcard = player[infos.turn_player].list_mzone[i];
+				if(pcard && pcard->is_capable_attack() && pcard->is_affected_by_effect(EFFECT_MUST_ATTACK)) {
+					must_attack = true;
+					break;
+				}
+			}
+			if(core.to_bp && (must_attack || is_player_affected_by_effect(infos.turn_player, EFFECT_CANNOT_EP)))
+				core.to_ep = FALSE;
+		}
 		if((infos.phase == PHASE_MAIN1 && is_player_affected_by_effect(infos.turn_player, EFFECT_SKIP_M1))
 		        || (infos.phase == PHASE_MAIN2 && is_player_affected_by_effect(infos.turn_player, EFFECT_SKIP_M2))) {
 			if(core.to_bp && core.to_ep) {
@@ -2650,10 +2660,10 @@ int32 field::process_idle_command(uint16 step) {
 		card* target = core.repositionable_cards[returns.ivalue[0] >> 16];
 		if(target->is_position(POS_FACEUP_ATTACK)) {
 			core.phase_action = TRUE;
-			change_position(target, 0, infos.turn_player, POS_FACEUP_DEFENCE, FALSE);
+			change_position(target, 0, infos.turn_player, POS_FACEUP_DEFENSE, FALSE);
 			adjust_all();
 			add_process(PROCESSOR_POINT_EVENT, 0, 0, 0, FALSE, 0);
-		} else if(target->is_position(POS_FACEUP_DEFENCE)) {
+		} else if(target->is_position(POS_FACEUP_DEFENSE)) {
 			core.phase_action = TRUE;
 			change_position(target, 0, infos.turn_player, POS_FACEUP_ATTACK, FALSE);
 			adjust_all();
@@ -2662,7 +2672,7 @@ int32 field::process_idle_command(uint16 step) {
 			core.units.begin()->ptarget = (group*)target;
 			int32 positions = 0;
 			if(target->is_capable_change_position(infos.turn_player))
-				positions |= POS_FACEDOWN_DEFENCE;
+				positions |= POS_FACEDOWN_DEFENSE;
 			if(target->is_can_be_flip_summoned(infos.turn_player))
 				positions |= POS_FACEUP_ATTACK;
 			add_process(PROCESSOR_SELECT_POSITION, 0, 0, 0, infos.turn_player + (positions << 16), target->data.code);
@@ -2725,7 +2735,7 @@ int32 field::process_idle_command(uint16 step) {
 			add_process(PROCESSOR_FLIP_SUMMON, 0, 0, (group*)target, target->current.controler, 0);
 		else {
 			core.phase_action = TRUE;
-			change_position(target, 0, infos.turn_player, POS_FACEDOWN_DEFENCE, FALSE);
+			change_position(target, 0, infos.turn_player, POS_FACEDOWN_DEFENSE, FALSE);
 			adjust_all();
 			add_process(PROCESSOR_POINT_EVENT, 0, 0, 0, FALSE, 0);
 		}
@@ -3214,7 +3224,7 @@ int32 field::process_battle_command(uint16 step) {
 	}
 	case 23: {
 		if(core.attacker->current.location != LOCATION_MZONE || core.attacker->fieldid_r != core.pre_field[0]
-		        || ((core.attacker->current.position & POS_DEFENCE) && !(core.attacker->is_affected_by_effect(EFFECT_DEFENCE_ATTACK)))
+		        || ((core.attacker->current.position & POS_DEFENSE) && !(core.attacker->is_affected_by_effect(EFFECT_DEFENSE_ATTACK)))
 		        || (core.attack_target && (core.attack_target->current.location != LOCATION_MZONE || core.attack_target->fieldid_r != core.pre_field[1]))) {
 			core.units.begin()->step = 37;
 			return FALSE;
@@ -3261,18 +3271,18 @@ int32 field::process_battle_command(uint16 step) {
 	}
 	case 26: {
 		// Duel.CalculateDamage() goes here
-		uint32 aa = core.attacker->get_attack(), ad = core.attacker->get_defence();
+		uint32 aa = core.attacker->get_attack(), ad = core.attacker->get_defense();
 		uint32 da = 0, dd = 0;
 		uint8 pa = core.attacker->current.controler, pd;
 		core.attacker->q_cache.attack = aa;
-		core.attacker->q_cache.defence = ad;
+		core.attacker->q_cache.defense = ad;
 		core.attacker->set_status(STATUS_BATTLE_RESULT, FALSE);
 		core.attacker->set_status(STATUS_BATTLE_DESTROYED, FALSE);
 		if(core.attack_target) {
 			da = core.attack_target->get_attack();
-			dd = core.attack_target->get_defence();
+			dd = core.attack_target->get_defense();
 			core.attack_target->q_cache.attack = da;
-			core.attack_target->q_cache.defence = dd;
+			core.attack_target->q_cache.defense = dd;
 			core.attack_target->set_status(STATUS_BATTLE_RESULT, FALSE);
 			core.attack_target->set_status(STATUS_BATTLE_DESTROYED, FALSE);
 			pd = core.attack_target->current.controler;
@@ -3670,7 +3680,7 @@ int32 field::process_damage_step(uint16 step) {
 }
 void field::calculate_battle_damage(effect** pdamchange, card** preason_card, uint8* battle_destroyed)
 {
-	uint32 aa = core.attacker->get_attack(), ad = core.attacker->get_defence();
+	uint32 aa = core.attacker->get_attack(), ad = core.attacker->get_defense();
 	uint32 da = 0, dd = 0, a = aa, d;
 	uint8 pa = core.attacker->current.controler, pd;
 	uint8 damp = 0;
@@ -3678,14 +3688,14 @@ void field::calculate_battle_damage(effect** pdamchange, card** preason_card, ui
 	card* reason_card = 0;
 	uint8 bd[2] = {FALSE, FALSE};
 	core.battle_damage[0] = core.battle_damage[1] = 0;
-	if(core.attacker->is_position(POS_FACEUP_DEFENCE)) {
-		effect* defattack = core.attacker->is_affected_by_effect(EFFECT_DEFENCE_ATTACK);
+	if(core.attacker->is_position(POS_FACEUP_DEFENSE)) {
+		effect* defattack = core.attacker->is_affected_by_effect(EFFECT_DEFENSE_ATTACK);
 		if(defattack && defattack->get_value(core.attacker))
 			a = ad;
 	}
 	if(core.attack_target) {
 		da = core.attack_target->get_attack();
-		dd = core.attack_target->get_defence();
+		dd = core.attack_target->get_defense();
 		pd = core.attack_target->current.controler;
 		if(core.attack_target->is_position(POS_ATTACK)) {
 			d = da;
@@ -5218,7 +5228,7 @@ int32 field::adjust_step(uint16 step) {
 						pduel->write_buffer8(MSG_DECK_TOP);
 						pduel->write_buffer8(0);
 						pduel->write_buffer8(0);
-						if(ptop->current.position != POS_FACEUP_DEFENCE)
+						if(ptop->current.position != POS_FACEUP_DEFENSE)
 							pduel->write_buffer32(ptop->data.code);
 						else
 							pduel->write_buffer32(ptop->data.code | 0x80000000);
@@ -5228,7 +5238,7 @@ int32 field::adjust_step(uint16 step) {
 						pduel->write_buffer8(MSG_DECK_TOP);
 						pduel->write_buffer8(1);
 						pduel->write_buffer8(0);
-						if(ptop->current.position != POS_FACEUP_DEFENCE)
+						if(ptop->current.position != POS_FACEUP_DEFENSE)
 							pduel->write_buffer32(ptop->data.code);
 						else
 							pduel->write_buffer32(ptop->data.code | 0x80000000);

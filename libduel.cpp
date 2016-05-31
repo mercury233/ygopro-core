@@ -681,7 +681,7 @@ int32 scriptlib::duel_confirm_decktop(lua_State *L) {
 				pduel->write_buffer8(MSG_DECK_TOP);
 				pduel->write_buffer8(playerid);
 				pduel->write_buffer8(count);
-				if(pcard->current.position != POS_FACEUP_DEFENCE)
+				if(pcard->current.position != POS_FACEUP_DEFENSE)
 					pduel->write_buffer32(pcard->data.code);
 				else
 					pduel->write_buffer32(pcard->data.code | 0x80000000);
@@ -2996,7 +2996,7 @@ int32 scriptlib::duel_is_player_can_spsummon_monster(lua_State * L) {
 	if(!lua_isnil(L, 5))
 		dat.attack = lua_tointeger(L, 5);
 	if(!lua_isnil(L, 6))
-		dat.defence = lua_tointeger(L, 6);
+		dat.defense = lua_tointeger(L, 6);
 	if(!lua_isnil(L, 7))
 		dat.level = lua_tointeger(L, 7);
 	if(!lua_isnil(L, 8))
