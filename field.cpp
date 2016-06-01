@@ -1484,7 +1484,7 @@ int32 field::check_spsummon_once(card* pcard, uint8 playerid) {
 	auto iter = core.spsummon_once_map[playerid].find(pcard->spsummon_code);
 	return (iter == core.spsummon_once_map[playerid].end()) || (iter->second == 0);
 }
-// increase the binary custom counter
+// increase the binary custom counter 1~5
 void field::check_card_counter(card* pcard, int32 counter_type, int32 playerid) {
 	auto& counter_map = (counter_type == 1) ? core.summon_counter :
 						(counter_type == 2) ? core.normalsummon_counter :
@@ -1720,9 +1720,10 @@ int32 field::get_attack_target(card* pcard, card_vector* v, uint8 chain_attack) 
 		dir = false;
 	else{
 		// effects with target limit
-		// The system only check the general case (never attacked player), and the script should check specific condition.
+		// The system only check the general case (never attacked player) and approximate solution
 		if((peffect = pcard->is_affected_by_effect(EFFECT_ATTACK_ALL))
-				&& pcard->announced_cards.find(0) == pcard->announced_cards.end() && pcard->battled_cards.find(0) == pcard->battled_cards.end()) {
+				&& pcard->announced_cards.find(0) == pcard->announced_cards.end() && pcard->battled_cards.find(0) == pcard->battled_cards.end()
+				&& pcard->attack_all_target) {
 			for(auto cit = pv->begin(); cit != pv->end(); ++cit) {
 				atarget = *cit;
 				if(!atarget)
