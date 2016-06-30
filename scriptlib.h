@@ -211,7 +211,7 @@ public:
 	static int32 card_is_can_be_effect_target(lua_State *L);
 	static int32 card_is_can_be_battle_target(lua_State *L);
 	static int32 card_add_monster_attribute(lua_State *L);
-	static int32 card_trap_monster_complete(lua_State *L);
+	static int32 card_add_monster_attribute_complete(lua_State *L);
 	static int32 card_cancel_to_grave(lua_State *L);
 	static int32 card_get_tribute_requirement(lua_State *L);
 	static int32 card_get_battle_target(lua_State *L);
@@ -377,7 +377,6 @@ public:
 	static int32 duel_shuffle_setcard(lua_State *L);
 	static int32 duel_change_attacker(lua_State *L);
 	static int32 duel_change_attack_target(lua_State *L);
-	static int32 duel_replace_attack_target(lua_State *L);
 	static int32 duel_calculate_damage(lua_State *L);
 	static int32 duel_get_battle_damage(lua_State *L);
 	static int32 duel_change_battle_damage(lua_State *L);

@@ -1213,7 +1213,7 @@ int32 card::add_effect(effect* peffect) {
 		return 0;
 	card* check_target = this;
 	if (peffect->type & EFFECT_TYPE_SINGLE) {
-		if(peffect->code == EFFECT_SET_ATTACK && !peffect->is_flag(EFFECT_FLAG_SINGLE_RANGE)) {
+		if((peffect->code == EFFECT_SET_ATTACK || peffect->code == EFFECT_SET_BASE_ATTACK) && !peffect->is_flag(EFFECT_FLAG_SINGLE_RANGE)) {
 			for(auto it = single_effect.begin(); it != single_effect.end();) {
 				auto rm = it++;
 				if((rm->second->code == EFFECT_SET_ATTACK || rm->second->code == EFFECT_SET_ATTACK_FINAL)
@@ -1229,7 +1229,7 @@ int32 card::add_effect(effect* peffect) {
 					remove_effect(rm->second);
 			}
 		}
-		if(peffect->code == EFFECT_SET_DEFENSE && !peffect->is_flag(EFFECT_FLAG_SINGLE_RANGE)) {
+		if((peffect->code == EFFECT_SET_DEFENSE || peffect->code == EFFECT_SET_BASE_DEFENSE) && !peffect->is_flag(EFFECT_FLAG_SINGLE_RANGE)) {
 			for(auto it = single_effect.begin(); it != single_effect.end();) {
 				auto rm = it++;
 				if((rm->second->code == EFFECT_SET_DEFENSE || rm->second->code == EFFECT_SET_DEFENSE_FINAL)
@@ -1475,9 +1475,9 @@ void card::reset(uint32 id, uint32 reset_type) {
 			if (rrm->second & 0xffff0000 & id)
 				relations.erase(rrm);
 		}
-		if(id & 0x47c0000)
+		if(id & 0xc7c0000)
 			clear_relate_effect();
-		if(id & 0x5fc0000) {
+		if(id & 0xdfc0000) {
 			indestructable_effects.clear();
 			announced_cards.clear();
 			attacked_cards.clear();
@@ -1485,7 +1485,7 @@ void card::reset(uint32 id, uint32 reset_type) {
 			attacked_count = 0;
 			attack_all_target = TRUE;
 		}
-		if(id & 0x5fe0000) {
+		if(id & 0xdfe0000) {
 			battled_cards.clear();
 			reset_effect_count();
 			auto pr = field_effect.equal_range(EFFECT_DISABLE_FIELD);
@@ -1493,7 +1493,7 @@ void card::reset(uint32 id, uint32 reset_type) {
 				pr.first->second->value = 0;
 			set_status(STATUS_UNION, FALSE);
 		}
-		if(id & 0x57e0000) {
+		if(id & 0xd7e0000) {
 			counters.clear();
 			for(auto cit = effect_target_owner.begin(); cit != effect_target_owner.end(); ++cit)
 				(*cit)->effect_target_cards.erase(this);
@@ -2375,7 +2375,8 @@ int32 card::is_special_summonable(uint8 playerid, uint32 summon_type) {
 		pduel->lua->add_param(eset[i], PARAM_TYPE_EFFECT);
 		pduel->lua->add_param(this, PARAM_TYPE_CARD);
 		pduel->lua->add_param(playerid, PARAM_TYPE_INT);
-		if(!pduel->lua->check_condition(eset[i]->cost, 3)) {
+		pduel->lua->add_param(summon_type, PARAM_TYPE_INT);
+		if(!pduel->lua->check_condition(eset[i]->cost, 4)) {
 			pduel->game_field->restore_lp_cost();
 			return FALSE;
 		}
@@ -2421,7 +2422,8 @@ int32 card::is_can_be_special_summoned(effect * reason_effect, uint32 sumtype, u
 		pduel->lua->add_param(eset[i], PARAM_TYPE_EFFECT);
 		pduel->lua->add_param(this, PARAM_TYPE_CARD);
 		pduel->lua->add_param(sumplayer, PARAM_TYPE_INT);
-		if(!pduel->lua->check_condition(eset[i]->cost, 3)) {
+		pduel->lua->add_param(sumtype, PARAM_TYPE_INT);
+		if(!pduel->lua->check_condition(eset[i]->cost, 4)) {
 			pduel->game_field->restore_lp_cost();
 			return FALSE;
 		}
