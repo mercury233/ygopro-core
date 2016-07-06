@@ -3794,19 +3794,21 @@ int32 field::move_to_field(uint16 step, card * target, uint32 enable, uint32 ret
 			}
 		} else if(!is_equip && location == LOCATION_SZONE && (target->data.type & TYPE_PENDULUM)) {
 			uint32 flag = 0;
-			if(!get_field_card(playerid, LOCATION_SZONE, 6))
+			if(is_location_useable(playerid, LOCATION_SZONE, 6))
 				flag |= 1 << 14;
-			if(!get_field_card(playerid, LOCATION_SZONE, 7))
+			if(is_location_useable(playerid, LOCATION_SZONE, 7))
 				flag |= 1 << 15;
+			if(move_player != playerid)
+				flag = flag << 16;
 			pduel->write_buffer8(MSG_SELECT_PLACE);
-			pduel->write_buffer8(playerid);
+			pduel->write_buffer8(move_player);
 			pduel->write_buffer8(1);
 			pduel->write_buffer32(~flag);
 		} else {
 			uint32 flag;
 			uint32 lreason = (target->current.location == LOCATION_MZONE) ? LOCATION_REASON_CONTROL : LOCATION_REASON_TOFIELD;
 			uint32 ct = get_useable_count(playerid, location, move_player, lreason, &flag);
-			if((ret == 1) && (ct <= 0)) {
+			if((ret == 1) && (ct <= 0 || target->is_affected_by_effect(EFFECT_FORBIDDEN))) {
 				core.units.begin()->step = 3;
 				send_to(target, core.reason_effect, REASON_EFFECT, core.reason_player, PLAYER_NONE, LOCATION_GRAVE, 0, 0);
 				return FALSE;
