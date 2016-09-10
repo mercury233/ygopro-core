@@ -814,15 +814,15 @@ int32 field::process() {
 			add_process(PROCESSOR_SELECT_DISFIELD, 0, it->peffect, it->ptarget, it->arg1, it->arg2, it->arg3);
 			it->step++;
 		} else {
-			int32 playerid = it->arg1 & 0xffff;
-			int32 count = (it->arg1) >> 16;
+			int32 playerid = it->arg1;
+			int32 count = it->arg3;
 			int32 dfflag = 0;
 			uint8 p, l, s, pa = 0;
 			for(int32 i = 0; i < count; ++i) {
 				p = returns.bvalue[pa];
 				l = returns.bvalue[pa + 1];
 				s = returns.bvalue[pa + 2];
-				dfflag |= 1 << (s + (p == playerid ? 0 : 16) + (l == LOCATION_MZONE ? 0 : 8));
+				dfflag |= 0x1u << (s + (p == playerid ? 0 : 16) + (l == LOCATION_MZONE ? 0 : 8));
 				pa += 3;
 			}
 			pduel->lua->add_param(dfflag, PARAM_TYPE_INT);
@@ -2419,6 +2419,16 @@ int32 field::process_single_event() {
 						core.new_fchain.push_back(newchain);
 				}
 				peffect->handler->create_relation(newchain);
+				effect* deffect;
+				if(deffect = peffect->handler->is_affected_by_effect(EFFECT_DISABLE_EFFECT)) {
+					effect* negeff = pduel->new_effect();
+					negeff->owner = deffect->owner;
+					negeff->type = EFFECT_TYPE_SINGLE;
+					negeff->code = EFFECT_DISABLE_CHAIN;
+					negeff->value = newchain.chain_id;
+					negeff->reset_flag = RESET_EVENT | deffect->get_value();
+					peffect->handler->add_effect(negeff);
+				}
 			}
 		}
 	}
@@ -2770,7 +2780,7 @@ int32 field::process_battle_command(uint16 step) {
 			if(is_player_affected_by_effect(infos.turn_player, EFFECT_BP_TWICE))
 				core.units.begin()->arg2 = 1;
 			else core.units.begin()->arg2 = 0;
-			if(!peffect->value){
+			if(!peffect->value) {
 				infos.phase = PHASE_BATTLE;
 				add_process(PROCESSOR_PHASE_EVENT, 0, 0, 0, PHASE_BATTLE, 0);
 			} else {
@@ -2960,11 +2970,9 @@ int32 field::process_battle_command(uint16 step) {
 				pduel->write_buffer32(core.attacker->get_info_location());
 				add_process(PROCESSOR_SELECT_CARD, 0, 0, 0, 1 - infos.turn_player, 0x10001);
 			}
-		}
-		else if(core.units.begin()->arg1) {
+		} else if(core.units.begin()->arg1) {
 			add_process(PROCESSOR_SELECT_CARD, 0, 0, 0, infos.turn_player + 0x20000, 0x10001);
-		}
-		else
+		} else
 			add_process(PROCESSOR_SELECT_CARD, 0, 0, 0, infos.turn_player, 0x10001);
 		core.units.begin()->step = 5;
 		return FALSE;
@@ -2988,8 +2996,7 @@ int32 field::process_battle_command(uint16 step) {
 			core.chain_attack = FALSE;
 			core.units.begin()->step = -1;
 			return FALSE;
-		}
-		else if(returns.ivalue[0] == -2)
+		} else if(returns.ivalue[0] == -2)
 			core.attack_target = 0;
 		else
 			core.attack_target = core.select_cards[returns.bvalue[1]];
@@ -3108,7 +3115,20 @@ int32 field::process_battle_command(uint16 step) {
 			rollback = true;
 		// go to damage step
 		if(!rollback) {
+			infos.phase = PHASE_DAMAGE;
+			core.chain_attack = FALSE;
+			core.units.begin()->arg1 = FALSE;
+			core.damage_calculated = FALSE;
+			core.selfdes_disabled = TRUE;
+			core.flip_delayed = TRUE;
+			core.pre_field[0] = core.attacker->fieldid_r;
+			if(core.attack_target)
+				core.pre_field[1] = core.attack_target->fieldid_r;
+			else
+				core.pre_field[1] = 0;
+			core.attacker->attacked_count++;
 			core.attacker->attacked_cards.addcard(core.attack_target);
+			core.battled_count[infos.turn_player]++;
 			core.units.begin()->step = 19;
 			adjust_all();
 			return FALSE;
@@ -3143,20 +3163,8 @@ int32 field::process_battle_command(uint16 step) {
 		return FALSE;
 	}
 	case 20: {
-		infos.phase = PHASE_DAMAGE;
-		core.chain_attack = FALSE;
+		//infos.phase = PHASE_DAMAGE;
 		pduel->write_buffer8(MSG_DAMAGE_STEP_START);
-		core.units.begin()->arg1 = FALSE;
-		core.damage_calculated = FALSE;
-		core.selfdes_disabled = TRUE;
-		core.flip_delayed = TRUE;
-		core.pre_field[0] = core.attacker->fieldid_r;
-		if(core.attack_target)
-			core.pre_field[1] = core.attack_target->fieldid_r;
-		else
-			core.pre_field[1] = 0;
-		core.attacker->attacked_count++;
-		core.battled_count[infos.turn_player]++;
 		raise_single_event(core.attacker, 0, EVENT_BATTLE_START, 0, 0, 0, 0, 0);
 		if(core.attack_target)
 			raise_single_event(core.attack_target, 0, EVENT_BATTLE_START, 0, 0, 0, 0, 1);
@@ -3222,10 +3230,12 @@ int32 field::process_battle_command(uint16 step) {
 			core.units.begin()->step = 32;
 			return FALSE;
 		}
+		infos.phase = PHASE_DAMAGE_CAL;
+		adjust_all();
 		return FALSE;
 	}
 	case 24: {
-		infos.phase = PHASE_DAMAGE_CAL;
+		//infos.phase = PHASE_DAMAGE_CAL;
 		calculate_battle_damage(0, 0, 0);
 		raise_single_event(core.attacker, 0, EVENT_PRE_DAMAGE_CALCULATE, 0, 0, 0, 0, 0);
 		if(core.attack_target)
@@ -3621,7 +3631,7 @@ int32 field::process_damage_step(uint16 step, uint32 new_attack) {
 			core.units.begin()->step = 2;
 			return FALSE;
 		}
-		if(new_attack){
+		if(new_attack) {
 			core.attack_state_count[infos.turn_player]++;
 			core.battled_count[infos.turn_player]++;
 			check_card_counter(core.attacker, 5, infos.turn_player);
@@ -4259,6 +4269,7 @@ int32 field::add_chain(uint16 step) {
 			negeff->owner = deffect->owner;
 			negeff->type = EFFECT_TYPE_SINGLE;
 			negeff->code = EFFECT_DISABLE_CHAIN;
+			negeff->value = clit.chain_id;
 			negeff->reset_flag = RESET_CHAIN | RESET_EVENT | deffect->get_value();
 			phandler->add_effect(negeff);
 		}
@@ -4538,9 +4549,7 @@ int32 field::solve_chain(uint16 step, uint32 chainend_arg1, uint32 chainend_arg2
 		core.spsummon_state_count_tmp[1] = core.spsummon_state_count[1];
 		card* pcard = cait->triggering_effect->handler;
 		if(is_chain_disablable(cait->chain_count)) {
-			if((cait->flag & CHAIN_DISABLE_EFFECT) || pcard->is_affected_by_effect(EFFECT_DISABLE_CHAIN)
-					|| ((cait->triggering_location & LOCATION_ONFIELD) && pcard->is_affected_by_effect(EFFECT_DISABLE_CHAIN_FIELD))
-					|| (pcard->get_status(STATUS_DISABLED | STATUS_FORBIDDEN) && pcard->is_has_relation(*cait))) {
+			if(is_chain_disabled(cait->chain_count) || (pcard->get_status(STATUS_DISABLED | STATUS_FORBIDDEN) && pcard->is_has_relation(*cait))) {
 				if(!(cait->flag & CHAIN_DISABLE_EFFECT)) {
 					pduel->write_buffer8(MSG_CHAIN_DISABLED);
 					pduel->write_buffer8(cait->chain_count);
@@ -4707,7 +4716,7 @@ int32 field::solve_chain(uint16 step, uint32 chainend_arg1, uint32 chainend_arg2
 	case 13: {
 		raise_event((card*)0, EVENT_CHAIN_END, 0, 0, 0, 0, 0);
 		process_instant_event();
-		if(chainend_arg1 != 0x101 || chainend_arg2 != TRUE){
+		if(chainend_arg1 != 0x101 || chainend_arg2 != TRUE) {
 			core.hint_timing[0] |= TIMING_CHAIN_END;
 			core.hint_timing[1] |= TIMING_CHAIN_END;
 			add_process(PROCESSOR_POINT_EVENT, 0, 0, 0, chainend_arg1, chainend_arg2);

@@ -1231,8 +1231,7 @@ int32 scriptlib::duel_change_attack_target(lua_State *L) {
 			pduel->game_field->raise_event(target, EVENT_BE_BATTLE_TARGET, 0, REASON_REPLACE, 0, 1 - turnp, 0);
 			pduel->game_field->process_single_event();
 			pduel->game_field->process_instant_event();
-		}
-		else
+		} else
 			pduel->game_field->core.attack_player = TRUE;
 		lua_pushboolean(L, 1);
 	} else
@@ -1345,12 +1344,17 @@ int32 scriptlib::duel_negate_related_chain(lua_State *L) {
 		return FALSE;
 	if(!pcard->is_affect_by_effect(pduel->game_field->core.reason_effect))
 		return 0;
-	effect* negeff = pduel->new_effect();
-	negeff->owner = pduel->game_field->core.reason_effect->handler;
-	negeff->type = EFFECT_TYPE_SINGLE;
-	negeff->code = EFFECT_DISABLE_CHAIN_FIELD;
-	negeff->reset_flag = RESET_CHAIN | RESET_EVENT | reset_flag;
-	pcard->add_effect(negeff);
+	for(auto it = pduel->game_field->core.current_chain.rbegin(); it != pduel->game_field->core.current_chain.rend(); ++it) {
+		if(it->triggering_effect->handler == pcard && pcard->is_has_relation(*it)) {
+			effect* negeff = pduel->new_effect();
+			negeff->owner = pduel->game_field->core.reason_effect->handler;
+			negeff->type = EFFECT_TYPE_SINGLE;
+			negeff->code = EFFECT_DISABLE_CHAIN;
+			negeff->value = it->chain_id;
+			negeff->reset_flag = RESET_CHAIN | RESET_EVENT | reset_flag;
+			pcard->add_effect(negeff);
+		}
+	}
 	return 0;
 }
 int32 scriptlib::duel_disable_summon(lua_State *L) {
