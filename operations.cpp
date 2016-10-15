@@ -115,8 +115,19 @@ void field::get_control(card* target, effect* reason_effect, uint32 reason_playe
 	tset.insert(target);
 	get_control(&tset, reason_effect, reason_player, playerid, reset_phase, reset_count);
 }
+void field::swap_control(effect* reason_effect, uint32 reason_player, card_set* targets1, card_set* targets2, uint32 reset_phase, uint32 reset_count) {
+	group* ng1 = pduel->new_group(*targets1);
+	ng1->is_readonly = TRUE;
+	group* ng2 = pduel->new_group(*targets2);
+	ng2->is_readonly = TRUE;
+	add_process(PROCESSOR_SWAP_CONTROL, 0, reason_effect, ng1, reason_player, reset_phase, reset_count, 0, ng2);
+}
 void field::swap_control(effect* reason_effect, uint32 reason_player, card* pcard1, card* pcard2, uint32 reset_phase, uint32 reset_count) {
-	add_process(PROCESSOR_SWAP_CONTROL, 0, reason_effect, (group*)pcard1, reason_player, reset_phase, reset_count, 0, pcard2);
+	card_set tset1;
+	tset1.insert(pcard1);
+	card_set tset2;
+	tset2.insert(pcard2);
+	swap_control(reason_effect, reason_player, &tset1, &tset2, reset_phase, reset_count);
 }
 void field::equip(uint32 equip_player, card* equip_card, card* target, uint32 up, uint32 is_step) {
 	add_process(PROCESSOR_EQUIP, 0, NULL, (group*)target, 0, equip_player + (up << 16) + (is_step << 24), 0, 0, equip_card);
@@ -917,66 +928,111 @@ int32 field::get_control(uint16 step, effect* reason_effect, uint8 reason_player
 	}
 	return TRUE;
 }
-int32 field::swap_control(uint16 step, effect * reason_effect, uint8 reason_player, card * pcard1, card * pcard2, uint16 reset_phase, uint8 reset_count) {
+int32 field::swap_control(uint16 step, effect* reason_effect, uint8 reason_player, group* targets1, group* targets2, uint16 reset_phase, uint8 reset_count) {
 	switch(step) {
 	case 0: {
-		uint8 p1 = pcard1->current.controler, p2 = pcard2->current.controler;
-		uint8 l1 = pcard1->current.location, l2 = pcard2->current.location;
-		uint8 s1 = pcard1->current.sequence, s2 = pcard2->current.sequence;
-		returns.ivalue[0] = 0;
-		if(pcard1->overlay_target || pcard2->overlay_target)
-			return TRUE;
+		core.units.begin()->step = 9;
+		if(targets1->container.size() == 0)
+			return FALSE;
+		if(targets2->container.size() == 0)
+			return FALSE;
+		if(targets1->container.size() != targets2->container.size())
+			return FALSE;
+		for(auto cit = targets1->container.begin(); cit != targets1->container.end(); ++cit)
+			(*cit)->filter_disable_related_cards();
+		for(auto cit = targets2->container.begin(); cit != targets2->container.end(); ++cit)
+			(*cit)->filter_disable_related_cards();
+		auto cit1 = targets1->container.begin();
+		auto cit2 = targets2->container.begin();
+		uint8 p1 = (*cit1)->current.controler, p2 = (*cit2)->current.controler;
 		if(p1 == p2 || p1 == PLAYER_NONE || p2 == PLAYER_NONE)
-			return TRUE;
-		if(l1 != LOCATION_MZONE || l2 != LOCATION_MZONE)
-			return TRUE;
-		if(!pcard1->is_capable_change_control() || !pcard2->is_capable_change_control())
-			return TRUE;
-		if(!pcard1->is_affect_by_effect(reason_effect) || !pcard2->is_affect_by_effect(reason_effect))
-			return TRUE;
-		pcard1->filter_disable_related_cards();
-		pcard2->filter_disable_related_cards();
-		if(pcard1->unique_code && (pcard1->unique_location & LOCATION_MZONE))
-			remove_unique_card(pcard1);
-		if(pcard2->unique_code && (pcard2->unique_location & LOCATION_MZONE))
-			remove_unique_card(pcard2);
-		remove_card(pcard1);
-		remove_card(pcard2);
-		add_card(p2, pcard1, l2, s2);
-		add_card(p1, pcard2, l1, s1);
-		if(pcard1->unique_code && (pcard1->unique_location & LOCATION_MZONE))
-			add_unique_card(pcard1);
-		if(pcard2->unique_code && (pcard2->unique_location & LOCATION_MZONE))
-			add_unique_card(pcard2);
-		set_control(pcard1, p2, reset_phase, reset_count);
-		set_control(pcard2, p1, reset_phase, reset_count);
-		pcard1->reset(RESET_CONTROL, RESET_EVENT);
-		pcard2->reset(RESET_CONTROL, RESET_EVENT);
-		pcard1->filter_disable_related_cards();
-		pcard2->filter_disable_related_cards();
-		pcard1->set_status(STATUS_ATTACK_CANCELED, TRUE);
-		pcard2->set_status(STATUS_ATTACK_CANCELED, TRUE);
+			return FALSE;
+		for(auto cit = targets1->container.begin(); cit != targets1->container.end(); ++cit) {
+			card* pcard = *cit;
+			if(pcard->overlay_target)
+				return FALSE;
+			if(pcard->current.controler != p1)
+				return FALSE;
+			if(pcard->current.location != LOCATION_MZONE)
+				return FALSE;
+			if(!pcard->is_capable_change_control())
+				return FALSE;
+			if(!pcard->is_affect_by_effect(reason_effect))
+				return FALSE;
+		}
+		for(auto cit = targets2->container.begin(); cit != targets2->container.end(); ++cit) {
+			card* pcard = *cit;
+			if(pcard->overlay_target)
+				return FALSE;
+			if(pcard->current.controler != p2)
+				return FALSE;
+			if(pcard->current.location != LOCATION_MZONE)
+				return FALSE;
+			if(!pcard->is_capable_change_control())
+				return FALSE;
+			if(!pcard->is_affect_by_effect(reason_effect))
+				return FALSE;
+		}
+		for(auto cit = targets1->container.begin(); cit != targets1->container.end(); ++cit) {
+			card* pcard = *cit;
+			if(pcard->unique_code && (pcard->unique_location & LOCATION_MZONE))
+				remove_unique_card(pcard);
+		}
+		for(auto cit = targets2->container.begin(); cit != targets2->container.end(); ++cit) {
+			card* pcard = *cit;
+			if(pcard->unique_code && (pcard->unique_location & LOCATION_MZONE))
+				remove_unique_card(pcard);
+		}
+		while(cit1 != targets1->container.end()) {
+			card* pcard1 = *cit1++;
+			card* pcard2 = *cit2++;
+			uint8 l1 = pcard1->current.location, l2 = pcard2->current.location;
+			uint8 s1 = pcard1->current.sequence, s2 = pcard2->current.sequence;
+			remove_card(pcard1);
+			remove_card(pcard2);
+			add_card(p2, pcard1, l2, s2);
+			add_card(p1, pcard2, l1, s1);
+			pcard1->reset(RESET_CONTROL, RESET_EVENT);
+			pcard2->reset(RESET_CONTROL, RESET_EVENT);
+			set_control(pcard1, p2, reset_phase, reset_count);
+			set_control(pcard2, p1, reset_phase, reset_count);
+			pcard1->set_status(STATUS_ATTACK_CANCELED, TRUE);
+			pcard2->set_status(STATUS_ATTACK_CANCELED, TRUE);
+			pduel->write_buffer8(MSG_SWAP);
+			pduel->write_buffer32(pcard1->data.code);
+			pduel->write_buffer32(pcard2->get_info_location());
+			pduel->write_buffer32(pcard2->data.code);
+			pduel->write_buffer32(pcard1->get_info_location());
+		}
+		core.units.begin()->step = 0;
 		return FALSE;
 	}
 	case 1: {
-		pduel->write_buffer8(MSG_SWAP);
-		pduel->write_buffer32(pcard1->data.code);
-		pduel->write_buffer32(pcard2->get_info_location());
-		pduel->write_buffer32(pcard2->data.code);
-		pduel->write_buffer32(pcard1->get_info_location());
-		adjust_instant();
-		raise_single_event(pcard1, 0, EVENT_CONTROL_CHANGED, reason_effect, REASON_EFFECT, reason_player, pcard1->current.controler, 0);
-		raise_single_event(pcard2, 0, EVENT_CONTROL_CHANGED, reason_effect, REASON_EFFECT, reason_player, pcard2->current.controler, 0);
+		targets1->container.insert(targets2->container.begin(), targets2->container.end());
+		for(auto cit = targets1->container.begin(); cit != targets1->container.end(); ++cit) {
+			card* pcard = *cit;
+			pcard->filter_disable_related_cards();
+			if(pcard->unique_code && (pcard->unique_location & LOCATION_MZONE))
+				add_unique_card(pcard);
+			raise_single_event(pcard, 0, EVENT_CONTROL_CHANGED, reason_effect, REASON_EFFECT, reason_player, pcard->current.controler, 0);
+		}
+		raise_event(&targets1->container, EVENT_CONTROL_CHANGED, reason_effect, REASON_EFFECT, reason_player, 0, 0);
 		process_single_event();
-		card_set cset;
-		cset.insert(pcard1);
-		cset.insert(pcard2);
-		raise_event(&cset, EVENT_CONTROL_CHANGED, reason_effect, REASON_EFFECT, reason_player, 0, 0);
 		process_instant_event();
 		return FALSE;
 	}
 	case 2: {
+		core.operated_set = targets1->container;
 		returns.ivalue[0] = 1;
+		pduel->delete_group(targets1);
+		pduel->delete_group(targets2);
+		return TRUE;
+	}
+	case 10: {
+		core.operated_set.clear();
+		returns.ivalue[0] = 0;
+		pduel->delete_group(targets1);
+		pduel->delete_group(targets2);
 		return TRUE;
 	}
 	}
@@ -1192,7 +1248,7 @@ int32 field::equip(uint16 step, uint8 equip_player, card * equip_card, card * ta
 		if(get_useable_count(equip_player, LOCATION_SZONE, equip_player, LOCATION_REASON_TOFIELD) <= 0)
 			return TRUE;
 		equip_card->enable_field_effect(false);
-		move_to_field(equip_card, equip_player, equip_player, LOCATION_SZONE, (up || equip_card->is_position(POS_FACEUP)) ? POS_FACEUP : POS_FACEDOWN, FALSE, FALSE, TRUE);
+		move_to_field(equip_card, equip_player, equip_player, LOCATION_SZONE, (up || equip_card->is_position(POS_FACEUP)) ? POS_FACEUP : POS_FACEDOWN, FALSE, 0, TRUE);
 		return FALSE;
 	}
 	case 1: {
@@ -3437,6 +3493,7 @@ int32 field::send_to(uint16 step, group * targets, effect * reason_effect, uint3
 		return FALSE;
 	}
 	case 7: {
+		// crystal beast redirection
 		exargs* param = (exargs*)targets;
 		card* pcard = *param->cvit;
 		uint32 flag;
@@ -3752,6 +3809,7 @@ int32 field::discard_deck(uint16 step, uint8 playerid, uint8 count, uint32 reaso
 	return TRUE;
 }
 // move a card from anywhere to field, including sp_summon, Duel.MoveToField(), Duel.ReturnToField()
+// ret: 0 = default, 1 = return after temporarily banished, 2 = trap_monster return to LOCATION_SZONE
 // call move_card() in step 2
 int32 field::move_to_field(uint16 step, card * target, uint32 enable, uint32 ret, uint32 is_equip) {
 	uint32 move_player = (target->to_field_param >> 24) & 0xff;
@@ -3825,7 +3883,8 @@ int32 field::move_to_field(uint16 step, card * target, uint32 enable, uint32 ret
 				if(target->current.location & LOCATION_ONFIELD)
 					resetflag |= RESET_LEAVE;
 				effect* peffect = target->is_affected_by_effect(EFFECT_PRE_MONSTER);
-				if((location & LOCATION_ONFIELD) && (target->current.location & LOCATION_ONFIELD) && !(peffect && (peffect->value & TYPE_TRAP)))
+				if((location & LOCATION_ONFIELD) && (target->current.location & LOCATION_ONFIELD)
+						&& !(peffect && (peffect->value & TYPE_TRAP)) && ret != 2)
 					resetflag |= RESET_MSCHANGE;
 				target->reset(resetflag, RESET_EVENT);
 			}

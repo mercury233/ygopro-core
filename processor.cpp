@@ -459,7 +459,7 @@ int32 field::process() {
 		return pduel->bufferlen;
 	}
 	case PROCESSOR_SWAP_CONTROL: {
-		if (swap_control(it->step, it->peffect, it->arg1, (card*)it->ptarget, (card*)it->ptr1, it->arg2, it->arg3)) {
+		if (swap_control(it->step, it->peffect, it->arg1, it->ptarget, (group*)it->ptr1, it->arg2, it->arg3)) {
 			core.units.pop_front();
 		} else
 			it->step++;
@@ -2968,12 +2968,19 @@ int32 field::process_battle_command(uint16 step) {
 				pduel->write_buffer8(MSG_BECOME_TARGET);
 				pduel->write_buffer8(1);
 				pduel->write_buffer32(core.attacker->get_info_location());
+				pduel->write_buffer8(MSG_HINT);
+				pduel->write_buffer8(HINT_SELECTMSG);
+				pduel->write_buffer8(1 - infos.turn_player);
+				pduel->write_buffer32(549);
 				add_process(PROCESSOR_SELECT_CARD, 0, 0, 0, 1 - infos.turn_player, 0x10001);
 			}
-		} else if(core.units.begin()->arg1) {
-			add_process(PROCESSOR_SELECT_CARD, 0, 0, 0, infos.turn_player + 0x20000, 0x10001);
-		} else
-			add_process(PROCESSOR_SELECT_CARD, 0, 0, 0, infos.turn_player, 0x10001);
+		} else {
+			pduel->write_buffer8(MSG_HINT);
+			pduel->write_buffer8(HINT_SELECTMSG);
+			pduel->write_buffer8(infos.turn_player);
+			pduel->write_buffer32(549);
+			add_process(PROCESSOR_SELECT_CARD, 0, 0, 0, infos.turn_player + (core.units.begin()->arg1 ? 0x20000 : 0), 0x10001);
+		}
 		core.units.begin()->step = 5;
 		return FALSE;
 	}
@@ -2982,9 +2989,13 @@ int32 field::process_battle_command(uint16 step) {
 		if(returns.ivalue[0]) {
 			returns.ivalue[0] = -2;
 		} else {
-			if(core.select_cards.size())
+			if(core.select_cards.size()) {
+				pduel->write_buffer8(MSG_HINT);
+				pduel->write_buffer8(HINT_SELECTMSG);
+				pduel->write_buffer8(infos.turn_player);
+				pduel->write_buffer32(549);
 				add_process(PROCESSOR_SELECT_CARD, 0, 0, 0, infos.turn_player, 0x10001);
-			else {
+			} else {
 				core.chain_attack = FALSE;
 				core.units.begin()->step = -1;
 			}
@@ -4925,7 +4936,7 @@ int32 field::refresh_location_info(uint16 step) {
 		int32 val = peffect->get_value();
 		uint32 dis_count = (val & 0xffff) - field_used_count[(val >> 16) & 0x1f];
 		uint32 empty_count = 5 - field_used_count[szone_flag];
-		uint32 flag = (szone_flag << 8) | 0xffff00ff;
+		uint32 flag = (szone_flag << 8) | 0xffffe0ff;
 		if(dis_count > empty_count)
 			dis_count = empty_count;
 		core.units.begin()->arg1 = dis_count;
@@ -5038,10 +5049,10 @@ int32 field::adjust_step(uint16 step) {
 			for(uint8 i = 0; i < 5; ++i) {
 				pcard = player[tp].list_mzone[i];
 				if(!pcard) continue;
-				if((pcard->get_type()&TYPE_TRAPMONSTER) && pcard->is_affected_by_effect(EFFECT_DISABLE_TRAPMONSTER)) {
+				if((pcard->get_type() & TYPE_TRAPMONSTER) && pcard->is_affected_by_effect(EFFECT_DISABLE_TRAPMONSTER)) {
 					pcard->reset(RESET_TURN_SET, RESET_EVENT);
 					refresh_location_info_instant();
-					move_to_field(pcard, tp, tp, LOCATION_SZONE, pcard->current.position);
+					move_to_field(pcard, tp, tp, LOCATION_SZONE, pcard->current.position, FALSE, 2);
 					core.re_adjust = TRUE;
 				}
 			}
