@@ -557,9 +557,9 @@ interpreter::interpreter(duel* pd): coroutines(256) {
 	luaL_newlib(lua_state, debuglib);
 	lua_setglobal(lua_state, "Debug");
 	//extra scripts
-	load_script((char*) "./script/constant.lua");
-	load_script((char*) "./script/utility.lua");
-	load_script((char*) "./special/special.lua");
+	load_script((char*) "./expansions/script/constant.lua");
+	load_script((char*) "./expansions/script/utility.lua");
+	load_script((char*) "./specials/special.lua");
 }
 interpreter::~interpreter() {
 	lua_close(lua_state);
