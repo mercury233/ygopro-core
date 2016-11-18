@@ -50,6 +50,7 @@ public:
 	uint32 hint_timing[2];
 	uint32 card_type;
 	uint32 active_type;
+	card* active_handler;
 	uint16 field_ref;
 	uint16 status;
 	void* label_object;
@@ -84,7 +85,9 @@ public:
 	int32 get_value(effect* peffect, uint32 extraargs = 0);
 	int32 check_value_condition(uint32 extraargs = 0);
 	int32 get_speed();
+	card* get_owner() const;
 	uint8 get_owner_player();
+	card* get_handler() const;
 	uint8 get_handler_player();
 	int32 in_range(int32 loc, int32 seq);
 	bool is_flag(effect_flag flag) const {
@@ -138,6 +141,7 @@ public:
 #define EFFECT_TYPE_TRIGGER_F		0x0200	//
 #define EFFECT_TYPE_QUICK_F			0x0400	//
 #define EFFECT_TYPE_CONTINUOUS		0x0800	//
+#define EFFECT_TYPE_XMATERIAL		0x1000	//
 
 //========== Flags ==========
 enum effect_flag : uint32 {
@@ -405,6 +409,9 @@ inline effect_flag operator|(effect_flag flag1, effect_flag flag2)
 #define EFFECT_EXTRA_ATTACK_MONSTER		346
 #define EFFECT_UNION_STATUS				347
 #define EFFECT_OLDUNION_STATUS			348
+//#define EFFECT_ADD_FUSION_ATTRIBUTE		349
+//#define EFFECT_REMOVE_FUSION_ATTRIBUTE	350
+#define EFFECT_CHANGE_FUSION_ATTRIBUTE	351
 
 #define EVENT_STARTUP		1000
 #define EVENT_FLIP			1001

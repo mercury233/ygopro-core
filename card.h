@@ -152,6 +152,7 @@ public:
 	effect_container single_effect;
 	effect_container field_effect;
 	effect_container equip_effect;
+	effect_container xmaterial_effect;
 	effect_indexer indexer;
 	effect_relation relate_effect;
 	effect_set_v immune_effect;
@@ -178,6 +179,7 @@ public:
 	uint32 get_ritual_level(card* pcard);
 	uint32 check_xyz_level(card* pcard, uint32 lv);
 	uint32 get_attribute();
+	uint32 get_fusion_attribute(uint8 playerid);
 	uint32 get_race();
 	uint32 get_lscale();
 	uint32 get_rscale();
