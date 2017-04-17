@@ -126,15 +126,16 @@ public:
 	uint16 turnid;
 	uint16 turn_counter;
 	uint8 unique_pos[2];
-	uint16 unique_uid;
+	uint32 unique_fieldid;
 	uint32 unique_code;
 	uint32 unique_location;
+	int32 unique_function;
+	effect* unique_effect;
 	uint32 spsummon_code;
 	uint16 spsummon_counter[2];
 	uint16 spsummon_counter_rst[2];
 	uint8 assume_type;
 	uint32 assume_value;
-	effect* unique_effect;
 	card* equiping_target;
 	card* pre_equip_target;
 	card* overlay_target;
@@ -166,9 +167,11 @@ public:
 	uint32 get_code();
 	uint32 get_another_code();
 	int32 is_set_card(uint32 set_code);
+	int32 is_origin_set_card(uint32 set_code);
 	int32 is_pre_set_card(uint32 set_code);
 	int32 is_fusion_set_card(uint32 set_code);
 	uint32 get_type();
+	uint32 get_fusion_type();
 	int32 get_base_attack();
 	int32 get_attack();
 	int32 get_base_defense();
@@ -228,7 +231,7 @@ public:
 	void set_material(card_set* materials);
 	void add_card_target(card* pcard);
 	void cancel_card_target(card* pcard);
-	
+
 	void filter_effect(int32 code, effect_set* eset, uint8 sort = TRUE);
 	void filter_single_effect(int32 code, effect_set* eset, uint8 sort = TRUE);
 	void filter_single_continuous_effect(int32 code, effect_set* eset, uint8 sort = TRUE);
@@ -244,10 +247,12 @@ public:
 	int32 fusion_check(group* fusion_m, card* cg, uint32 chkf);
 	void fusion_select(uint8 playerid, group* fusion_m, card* cg, uint32 chkf);
 	int32 check_fusion_substitute(card* fcard);
-	
-	int32 is_equipable(card* pcard);
-	int32 is_summonable();
-	int32 is_summonable(effect* peffect);
+
+	int32 check_unique_code(card* pcard);
+	void get_unique_target(card_set* cset, int32 controler);
+	int32 is_summonable_card();
+	int32 is_fusion_summonable_card(uint32 summon_type);
+	int32 is_spsummonable(effect* peffect);
 	int32 is_summonable(effect* peffect, uint8 min_tribute);
 	int32 is_can_be_summoned(uint8 playerid, uint8 ingore_count, effect* peffect, uint8 min_tribute);
 	int32 get_summon_tribute_count();
@@ -283,7 +288,7 @@ public:
 	int32 is_control_can_be_changed();
 	int32 is_capable_be_battle_target(card* pcard);
 	int32 is_capable_be_effect_target(effect* peffect, uint8 playerid);
-	int32 is_can_be_fusion_material(card* fcard, uint8 ignore_mon = FALSE);
+	int32 is_can_be_fusion_material(card* fcard);
 	int32 is_can_be_synchro_material(card* scard, card* tuner = 0);
 	int32 is_can_be_ritual_material(card* scard);
 	int32 is_can_be_xyz_material(card* scard);
@@ -337,6 +342,7 @@ public:
 #define TYPE_TOON			0x400000	//
 #define TYPE_XYZ			0x800000	//
 #define TYPE_PENDULUM		0x1000000	//
+#define TYPE_SPSUMMON		0x2000000	//
 
 //Attributes
 #define ATTRIBUTE_EARTH		0x01		//
@@ -370,7 +376,8 @@ public:
 #define RACE_PSYCHO			0x100000	//
 #define RACE_DEVINE			0x200000	//
 #define RACE_CREATORGOD		0x400000	//
-#define RACE_PHANTOMDRAGON		0x800000	//
+#define RACE_WYRM			0x800000	//
+#define RACE_CYBERS			0x1000000	//
 //Reason
 #define REASON_DESTROY		0x1		//
 #define REASON_RELEASE		0x2		//
