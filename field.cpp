@@ -51,7 +51,7 @@ field::field(duel* pduel) {
 		player[i].list_hand.reserve(10);
 		player[i].list_grave.reserve(30);
 		player[i].list_remove.reserve(30);
-		player[i].list_extra.reserve(15);
+		player[i].list_extra.reserve(20);
 		for(int j = 0; j < 5; ++j)
 			player[i].list_mzone.push_back(0);
 		for(int j = 0; j < 8; ++j)
