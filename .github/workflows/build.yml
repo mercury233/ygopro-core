@@ -58,4 +58,4 @@ jobs:
         prerelease: true
         title: "Development Build"
         files: |
-          .\build\bin\x64\Release\ocgcore.dll
+          build/bin/x64/Release/ocgcore.dll
