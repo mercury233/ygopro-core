@@ -45,6 +45,10 @@ jobs:
           build\bin\x32\Release\ocgcore.dll
           build\bin\x64\Release\ocgcore.dll
 
+    - name: wtf
+      run: |
+        dir /s build
+
     - name: GitHub Release
       if: github.event_name == 'push'
       uses: marvinpinto/action-automatic-releases@latest
